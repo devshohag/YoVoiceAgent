@@ -49,7 +49,8 @@ RUN ./configure --with-jansson-bundled --with-pjproject-bundled
 
 # Default menuselect module set already enables what pjsip.conf/ari.conf/http.conf need:
 # chan_pjsip, res_pjsip*, res_ari*, res_stasis, res_http_websocket, app_dial, etc.
-RUN make -j"$(nproc)" \
+ARG MAKE_JOBS=2
+RUN make -j"${MAKE_JOBS}" \
     && make install \
     && make samples \
     && make config \
