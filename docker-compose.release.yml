@@ -1,0 +1,29 @@
+services:
+  asterisk:
+    image: "${CCAAS_IMAGE_PREFIX:?set CCAAS_IMAGE_PREFIX}/asterisk:${CCAAS_VERSION:?set CCAAS_VERSION}"
+
+  local-ai:
+    image: "${CCAAS_IMAGE_PREFIX:?set CCAAS_IMAGE_PREFIX}/local-ai:${CCAAS_VERSION:?set CCAAS_VERSION}"
+
+  ccaas-api:
+    image: "${CCAAS_IMAGE_PREFIX:?set CCAAS_IMAGE_PREFIX}/api:${CCAAS_VERSION:?set CCAAS_VERSION}"
+    environment:
+      # Release migration is a separate one-shot container.
+      Bootstrap__MigrateDatabase: "false"
+
+  telephony-worker:
+    image: "${CCAAS_IMAGE_PREFIX:?set CCAAS_IMAGE_PREFIX}/telephony-worker:${CCAAS_VERSION:?set CCAAS_VERSION}"
+
+  ccaas-web:
+    image: "${CCAAS_IMAGE_PREFIX:?set CCAAS_IMAGE_PREFIX}/web:${CCAAS_VERSION:?set CCAAS_VERSION}"
+
+  migrator:
+    image: "${CCAAS_IMAGE_PREFIX:?set CCAAS_IMAGE_PREFIX}/migrator:${CCAAS_VERSION:?set CCAAS_VERSION}"
+    profiles: [migration]
+    environment:
+      ConnectionStrings__Default: "Server=sqlserver,1433;Database=CCaaS;User Id=sa;Password=${SQL_SA_PASSWORD:?set SQL_SA_PASSWORD};TrustServerCertificate=True;"
+    command: ["--connection", "Server=sqlserver,1433;Database=CCaaS;User Id=sa;Password=${SQL_SA_PASSWORD:?set SQL_SA_PASSWORD};TrustServerCertificate=True;"]
+    depends_on:
+      sqlserver: { condition: service_healthy }
+    networks: [ccaas-net]
+    restart: "no"

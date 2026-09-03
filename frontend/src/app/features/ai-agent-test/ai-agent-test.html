@@ -1,0 +1,65 @@
+<section class="page">
+  <header>
+    <p class="eyebrow">DEVELOPMENT PLAYGROUND</p>
+    <h1>Test your AI voice agent</h1>
+    <p>Real AI responses through Puter.js. No OpenAI API key is stored in this project.</p>
+  </header>
+  <div class="layout">
+    <aside class="card settings">
+      <label>Active agent
+        <select [(ngModel)]="selectedAgentId" (ngModelChange)="resetConversation()">
+          @for (agent of agents(); track agent.id) { <option [value]="agent.id">{{ agent.name }}</option> }
+        </select>
+      </label>
+      @if (selectedAgent; as agent) {
+        <dl><div><dt>Language</dt><dd>{{ agent.language }}</dd></div><div><dt>Voice</dt><dd>{{ agent.voiceName }}</dd></div></dl>
+        <p class="prompt-label">Agent instructions</p><p class="prompt">{{ agent.systemPrompt }}</p>
+      } @else { <p>Create an active AI agent first.</p> }
+      <button type="button" class="secondary" (click)="resetConversation()">New conversation</button>
+    </aside>
+    <main class="card console">
+      <div class="messages" aria-live="polite">
+        @for (message of conversation(); track $index) {
+          <article class="bubble" [class.user]="message.role === 'user'" [class.tool]="message.role === 'tool'">
+            <span>{{ message.role === 'user' ? 'Customer' : message.role === 'tool' ? 'Approved .NET tool' : selectedAgent?.name }}</span><p>{{ message.content }}</p>
+          </article>
+        } @empty { <p class="empty">Select or create an active agent to begin.</p> }
+        @if (loading()) { <p class="thinking">Agent is thinking…</p> }
+      </div>
+      @if (error()) { <p class="error">{{ error() }}</p> }
+      <div class="pipeline-status">
+        <span class="status-dot" [class.busy]="transcribing() || loading() || speaking()"></span>
+        {{ status() }}
+        @if (conversationId()) { <span class="audit-badge">AUDITED</span> }
+      </div>
+      @if (replyAudioUrl()) {
+        <audio class="reply-audio" [src]="replyAudioUrl()" controls></audio>
+      }
+      @if (bookingConfirmation(); as booking) {
+        <section class="booking-confirmation">
+          <div>
+            <span class="booking-label">BOOKING CONFIRMED</span>
+            <strong>{{ booking.bookingReference }}</strong>
+            <small>{{ booking.startsAtUtc }} · {{ booking.status }}</small>
+          </div>
+          <button type="button" (click)="downloadVoucher()">Download PDF voucher</button>
+        </section>
+      }
+      <form (ngSubmit)="send()" class="composer">
+        <textarea name="customerMessage" [(ngModel)]="customerMessage" placeholder="Type what the customer says…" rows="3"></textarea>
+        <div class="automation-options">
+          <label><input type="checkbox" name="autoProcessAudio" [(ngModel)]="autoProcessAudio" /> Process uploaded audio automatically</label>
+          <label><input type="checkbox" name="autoSpeakReply" [(ngModel)]="autoSpeakReply" /> Speak new AI replies automatically</label>
+        </div>
+        <div class="actions">
+          <label class="upload">{{ transcribing() ? 'Transcribing…' : 'Upload audio' }}
+            <input type="file" accept="audio/*" (change)="uploadAudio($event)" [disabled]="transcribing()" />
+          </label>
+          <button type="button" class="secondary" (click)="speakLastReply()" [disabled]="speaking()">{{ speaking() ? 'Creating voice…' : 'Speak reply' }}</button>
+          <button type="submit" [disabled]="loading() || transcribing() || !selectedAgent">Send to AI</button>
+        </div>
+      </form>
+      <p class="notice">Development only: Puter may ask you to sign in. Usage belongs to the signed-in Puter account.</p>
+    </main>
+  </div>
+</section>

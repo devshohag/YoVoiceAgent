@@ -1,0 +1,17 @@
+<div class="shell">
+  <nav class="sidebar">
+    <h2>CCaaS</h2>
+    <a routerLink="/agent-workspace" routerLinkActive="active">Agent Workspace</a>
+    <a routerLink="/supervisor" routerLinkActive="active">Supervisor</a>
+    <a routerLink="/tenant-admin" routerLinkActive="active">Tenant Admin</a>
+    <a routerLink="/ai-agents" routerLinkActive="active">AI Voice Agents</a>
+    <a routerLink="/ai-agent-test" routerLinkActive="active">AI Agent Test</a>
+    <a routerLink="/voice-bridge" routerLinkActive="active">Voice Bridge</a>
+    <a routerLink="/appointment-master" routerLinkActive="active">Appointment Master</a>
+    <a routerLink="/master-data" routerLinkActive="active">Master Data & Settings</a>
+    <button class="logout" (click)="logout()">Log out</button>
+  </nav>
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

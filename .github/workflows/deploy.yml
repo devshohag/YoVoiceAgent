@@ -1,0 +1,36 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release tag, for example v0.1.0"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ccaas-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_HOST_KEY: ${{ secrets.VPS_HOST_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_HOST_KEY" > ~/.ssh/known_hosts
+      - name: Deploy exact version
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VERSION: ${{ inputs.version }}
+        run: ssh "$VPS_USER@$VPS_HOST" "cd /opt/ccaas && bash scripts/server/release.sh '$VERSION'"

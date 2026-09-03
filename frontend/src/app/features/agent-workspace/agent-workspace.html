@@ -1,0 +1,109 @@
+<div class="workspace">
+  <section class="handoff-panel">
+    <header>
+      <div><p class="eyebrow">LIVE VOICE ROUTING</p><h2>Human handoffs</h2></div>
+      <button (click)="loadHandoffs()">Refresh</button>
+    </header>
+    <p class="help">Keep your configured SIP extension registered. AI escalations are routed to available queue members dynamically.</p>
+    @if (handoffRefreshWarning()) { <p class="refresh-warning">{{ handoffRefreshWarning() }}</p> }
+    @if (handoffs().length === 0) {
+      <div class="empty-state"><strong>No handoffs yet</strong><span>Ask the AI caller to speak with a human.</span></div>
+    } @else {
+      <div class="handoff-list">
+        @if (activeHandoffs().length) { <h3 class="handoff-group-title">Active handoffs</h3> }
+        @if (!activeHandoffs().length && recentHandoffs().length) { <h3 class="handoff-group-title">Recent completed handoffs</h3> }
+        @for (item of visibleHandoffs(); track item.callSessionId) {
+          @if ($index === activeHandoffs().length && activeHandoffs().length && recentHandoffs().length) {
+            <h3 class="handoff-group-title history">Recent completed handoffs</h3>
+          }
+          <article class="handoff-card">
+            <div class="handoff-title"><strong>Caller {{ item.fromNumber }}</strong><span [class.live]="!item.endedAt">{{ state(item) }}</span></div>
+            <p>{{ reason(item) }}</p>
+            @if(outcome(item)){<p class="handoff-outcome"><b>Latest outcome:</b> {{outcome(item)}}</p>}
+            <dl><div><dt>Target</dt><dd>Extension {{ extension(item) }}</dd></div><div><dt>Requested</dt><dd>{{ item.occurredAt | date:'medium' }}</dd></div></dl>
+            @if (context(item); as ctx) {
+              @if (ctx.summary) {
+                <div class="context-box">
+                  <div class="context-meta">
+                    <span>{{ ctx.detectedLanguage || 'Language unknown' }}</span>
+                    <span>{{ ctx.sentiment || 'Sentiment unknown' }}</span>
+                    <span>{{ ctx.usedFallback ? 'Safe fallback' : ctx.provider }}</span>
+                  </div>
+                  <h3>AI handoff summary</h3>
+                  <p>{{ ctx.summary }}</p>
+                  @if (ctx.customerIntent) { <p><b>Customer intent:</b> {{ ctx.customerIntent }}</p> }
+                  @if (ctx.suggestedOpening) {
+                    <div class="opening"><b>Suggested opening</b><span>“{{ ctx.suggestedOpening }}”</span></div>
+                  }
+                  @if (ctx.collectedDetails?.length) {
+                    <h4>Collected details</h4><ul>@for (detail of ctx.collectedDetails; track detail) { <li>{{ detail }}</li> }</ul>
+                  }
+                  @if (ctx.unresolvedItems?.length) {
+                    <h4>Still unresolved</h4><ul class="unresolved">@for (issue of ctx.unresolvedItems; track issue) { <li>{{ issue }}</li> }</ul>
+                  }
+                  @if (transcriptLines(item).length) {
+                    <details><summary>Conversation transcript</summary>
+                      <div class="transcript">@for (line of transcriptLines(item); track $index) { <p>{{ line }}</p> }</div>
+                    </details>
+                  }
+                </div>
+              }
+            }
+            <div class="card-actions">
+              <button (click)="selectCall(item)">Customer 360 / wrap-up</button>
+              @if (item.fullRecordingId) { <button class="secondary" (click)="downloadRecording(item)">Download full recording</button> }
+              @else if (item.endedAt) { <span class="recording-wait">Recording finalizing…</span> }
+            </div>
+            <small>Call {{ item.callSessionId }}</small>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="inbox-panel">
+    <header>
+      <h2>Unified Inbox</h2>
+      <button (click)="loadInbox()">Refresh</button>
+    </header>
+
+    @if (loading()) {
+      <p>Loading...</p>
+    } @else if (inbox().length === 0) {
+      <p class="empty">No conversations assigned yet.</p>
+    } @else {
+      <ul>
+        @for (item of inbox(); track item.conversationId) {
+          <li>
+            <span class="channel">{{ item.channelType }}</span>
+            <span class="status">{{ item.status }}</span>
+            <span class="updated">{{ item.updatedAt | date: 'short' }}</span>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <section class="call-panel">
+    <p class="eyebrow">AGENT SOFTPHONE</p><h2>Dynamic SIP assignment</h2>
+    <p>Your extension, queue membership and availability are managed in Master Data & Settings. Answer a routed escalation and continue on the original customer call.</p>
+    <div class="status-line"><i></i> Ready for AI handoff</div>
+  </section>
+
+  <section class="customer-panel">
+    <h2>Customer 360</h2>
+    @if (customer360(); as view) {
+      <div class="customer-identity"><strong>{{ view.customer.name }}</strong><span>{{ view.customer.phone }}</span><span>{{ view.customer.email || 'No email' }}</span></div>
+      <form (ngSubmit)="saveWrapUp()" class="wrapup-form">
+        <label>Disposition<select [(ngModel)]="dispositionId" name="disposition"><option value="">Select disposition</option>@for(d of dispositions();track d.id){<option [value]="d.id">{{d.description}}{{d.requiresFollowUp ? ' · follow-up' : ''}}</option>}</select></label>
+        <label>Agent note<textarea [(ngModel)]="noteText" name="note" maxlength="2000" rows="3" placeholder="What happened and what should happen next?"></textarea></label>
+        <button type="submit">Save wrap-up</button>
+        @if(actionMessage()){<span class="action-message">{{actionMessage()}}</span>}
+      </form>
+      <h3>Recent notes</h3>
+      @if(!view.notes.length){<p class="empty">No notes yet.</p>}@else{<ul class="timeline-list">@for(n of view.notes;track n.id){<li><span>{{n.body}}</span><small>{{n.createdAt|date:'medium'}}</small></li>}</ul>}
+      <h3>Call history</h3>
+      @if(!view.history.length){<p class="empty">No earlier calls.</p>}@else{<ul class="timeline-list">@for(c of view.history;track c.id){<li><span>{{c.status}}</span><small>{{c.startedAt|date:'medium'}}</small></li>}</ul>}
+    } @else { <p class="empty">Select a handoff to view customer history and complete wrap-up.</p> }
+  </section>
+</div>

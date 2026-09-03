@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <!--
+      dotnet-ef requires Microsoft.EntityFrameworkCore.Design on the STARTUP project (this one),
+      not just on the project that contains the DbContext (CCaaS.Infrastructure). Without this,
+      `dotnet ef migrations add` / `dotnet ef database update` fail with:
+      "Your startup project 'CCaaS.Api' doesn't reference Microsoft.EntityFrameworkCore.Design."
+      PrivateAssets="all" keeps it out of the published runtime output - it's design-time/tooling
+      only.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CCaaS.Domain\CCaaS.Domain.csproj" />
+    <ProjectReference Include="..\CCaaS.Application\CCaaS.Application.csproj" />
+    <ProjectReference Include="..\CCaaS.Infrastructure\CCaaS.Infrastructure.csproj" />
+    <ProjectReference Include="..\CCaaS.Shared\CCaaS.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

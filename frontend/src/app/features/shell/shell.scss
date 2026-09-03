@@ -1,0 +1,46 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  background: #1e3a5f;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  gap: 0.5rem;
+
+  h2 {
+    margin: 0 0 1rem;
+  }
+
+  a {
+    color: #cbd5e1;
+    text-decoration: none;
+    padding: 0.5rem;
+    border-radius: 4px;
+
+    &.active {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+    }
+  }
+
+  .logout {
+    margin-top: auto;
+    padding: 0.5rem;
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    color: #cbd5e1;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+}
+
+.content {
+  flex: 1;
+  padding: 1.5rem;
+  background: #f4f6f8;
+}

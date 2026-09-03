@@ -1,0 +1,27 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Angular / Node
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Docker volumes are named volumes, not bind-mounted directories, so nothing to ignore there.
+
+# Secrets - never commit real values once you replace the dev placeholders
+**/appsettings.Production.json
+*.pfx
+*.key
+.env.server
+.env.release
+runtime/
+backups/
+__pycache__/
+*.pyc

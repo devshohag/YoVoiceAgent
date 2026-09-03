@@ -1,0 +1,171 @@
+name: ccaas-server
+
+networks:
+  ccaas-net: { driver: bridge }
+
+volumes:
+  sqlserver-data:
+  rabbitmq-data:
+  minio-data:
+  asterisk-recordings:
+  ollama-data:
+  local-ai-models:
+  dataprotection-keys:
+
+x-app-env: &app-env
+  ASPNETCORE_ENVIRONMENT: Production
+  ConnectionStrings__Default: "Server=sqlserver,1433;Database=CCaaS;User Id=sa;Password=${SQL_SA_PASSWORD:?set SQL_SA_PASSWORD};TrustServerCertificate=True;"
+  Jwt__SigningKey: "${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY}"
+  Redis__ConnectionString: redis:6379
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Port: "5672"
+  RabbitMq__Username: ccaas
+  RabbitMq__Password: "${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}"
+  ObjectStorage__Endpoint: object-storage:9000
+  ObjectStorage__AccessKey: "${MINIO_ROOT_USER:?set MINIO_ROOT_USER}"
+  ObjectStorage__SecretKey: "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}"
+  ObjectStorage__UseSsl: "false"
+  Telephony__AriBaseUrl: http://asterisk:8088/ari
+  Telephony__AriUsername: "${ASTERISK_ARI_USERNAME:-ccaas}"
+  Telephony__AriPassword: "${ASTERISK_ARI_PASSWORD:?set ASTERISK_ARI_PASSWORD}"
+  Telephony__DefaultTenantId: "${CCAAS_DEMO_TENANT_ID:-3FA85F64-5717-4562-B3FC-2C963F66AFA6}"
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD:?set SQL_SA_PASSWORD}"
+      MSSQL_MEMORY_LIMIT_MB: "2560"
+    volumes: [sqlserver-data:/var/opt/mssql]
+    networks: [ccaas-net]
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD-SHELL", "(/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1') || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    networks: [ccaas-net]
+    mem_limit: 384m
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20 }
+
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ccaas
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}"
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    networks: [ccaas-net]
+    mem_limit: 512m
+    healthcheck: { test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"], interval: 10s, timeout: 5s, retries: 20 }
+
+  object-storage:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?set MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}"
+    volumes: [minio-data:/data]
+    networks: [ccaas-net]
+    mem_limit: 512m
+    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 10s, timeout: 5s, retries: 20 }
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment: { OLLAMA_KEEP_ALIVE: "5m", OLLAMA_NUM_PARALLEL: "1" }
+    volumes: [ollama-data:/root/.ollama]
+    networks: [ccaas-net]
+    mem_limit: 3g
+    healthcheck: { test: ["CMD", "ollama", "list"], interval: 15s, timeout: 5s, retries: 30 }
+
+  ollama-init:
+    image: ollama/ollama:latest
+    environment: { OLLAMA_HOST: http://ollama:11434 }
+    command: ["pull", "${OLLAMA_MODEL:-qwen3:4b}"]
+    depends_on: { ollama: { condition: service_healthy } }
+    networks: [ccaas-net]
+
+  local-ai:
+    build: { context: ./infra/local-ai }
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL: "${WHISPER_MODEL:-base}"
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE_TYPE: "${WHISPER_COMPUTE_TYPE:-int8}"
+      SPEECH_NUM_PARALLEL: "${LOCAL_AI_SPEECH_PARALLEL:-1}"
+    volumes: [local-ai-models:/models]
+    networks: [ccaas-net]
+    mem_limit: 2560m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  asterisk:
+    build: { context: ./infra/asterisk }
+    restart: unless-stopped
+    volumes:
+      - ./runtime/asterisk-conf:/etc/asterisk:ro
+      - asterisk-recordings:/var/spool/asterisk/recording
+    ports:
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
+      - "10000-10100:10000-10100/udp"
+    networks: [ccaas-net]
+    mem_limit: 512m
+
+  ccaas-api:
+    build: { context: ., dockerfile: src/CCaaS.Api/Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      Bootstrap__MigrateDatabase: "${BOOTSTRAP_MIGRATE_DATABASE:-false}"
+      Bootstrap__SeedDemoData: "${BOOTSTRAP_SEED_DEMO_DATA:-false}"
+      DataProtection__KeyPath: /var/lib/ccaas/keys
+    volumes: [dataprotection-keys:/var/lib/ccaas/keys]
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      object-storage: { condition: service_healthy }
+    networks: [ccaas-net]
+    mem_limit: 768m
+
+  telephony-worker:
+    build: { context: ., dockerfile: src/CCaaS.Workers.Telephony/Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      AiVoice__Mode: Local
+      AiVoice__MaxConcurrentCalls: "${AI_VOICE_MAX_CONCURRENT_CALLS:-1}"
+    volumes: [asterisk-recordings:/recordings]
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      object-storage: { condition: service_healthy }
+      asterisk: { condition: service_started }
+      ollama-init: { condition: service_completed_successfully }
+      local-ai: { condition: service_healthy }
+    networks: [ccaas-net]
+    mem_limit: 768m
+
+  ccaas-web:
+    build: { context: ./frontend, dockerfile: Dockerfile.server }
+    restart: unless-stopped
+    ports: ["80:80"]
+    depends_on: [ccaas-api]
+    networks: [ccaas-net]
+    mem_limit: 128m

@@ -1,0 +1,35 @@
+<div class="placeholder-page">
+  <h1>Tenant Admin</h1>
+
+  <form class="provision-form" (ngSubmit)="provision()">
+    <label>
+      Tenant name
+      <input type="text" name="name" [(ngModel)]="name" required />
+    </label>
+
+    <label>
+      Slug
+      <input type="text" name="slug" [(ngModel)]="slug" required />
+    </label>
+
+    <label>
+      Edition
+      <select name="edition" [(ngModel)]="edition">
+        <option value="Voice">Voice</option>
+        <option value="Omnichannel">Omnichannel</option>
+        <option value="Enterprise">Enterprise</option>
+      </select>
+    </label>
+
+    <button type="submit" [disabled]="submitting()">Provision tenant</button>
+  </form>
+
+  @if (result()) {
+    <p>{{ result() }}</p>
+  }
+
+  <p class="note">
+    TODO: branches/teams/agents, SIP trunk connection, and channel account screens
+    (Section 1 target business outcome) go here next.
+  </p>
+</div>

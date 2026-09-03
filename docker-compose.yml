@@ -1,0 +1,235 @@
+networks:
+  ccaas-net:
+    driver: bridge
+
+volumes:
+  sqlserver-data:
+  rabbitmq-data:
+  minio-data:
+  grafana-data:
+  asterisk-recordings:
+  ollama-data:
+  local-ai-models:
+  dataprotection-keys:
+
+services:
+  # ---- Data & messaging tier (Section 6/18) -----------------------------------------------
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Your_password123!"
+    ports: ["1433:1433"]
+    volumes: ["sqlserver-data:/var/opt/mssql"]
+    networks: [ccaas-net]
+    healthcheck:
+      # sqlcmd's install path has moved between mssql-server image releases (mssql-tools vs
+      # mssql-tools18, with/without -C) - try both rather than hard-coding one that might not
+      # exist in whatever tag you pull.
+      test: ["CMD-SHELL", "(/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1') || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    networks: [ccaas-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ccaas
+      RABBITMQ_DEFAULT_PASS: ccaas_dev_password
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # management UI (http://localhost:15672)
+    volumes: ["rabbitmq-data:/var/lib/rabbitmq"]
+    networks: [ccaas-net]
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  object-storage:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ccaas_minio_admin
+      MINIO_ROOT_PASSWORD: ccaas_minio_password
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # console (http://localhost:9001)
+    volumes: ["minio-data:/data"]
+    networks: [ccaas-net]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Free local LLM for structured AI-to-human handoff summaries.
+  # First use: docker compose exec ollama ollama pull qwen3:4b
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks: [ccaas-net]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ollama-init:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "qwen3:4b"]
+    depends_on:
+      ollama: { condition: service_healthy }
+    networks: [ccaas-net]
+
+  # Free, keyless development speech service: Faster-Whisper STT + Piper TTS.
+  # Models are downloaded once on first use and retained in local-ai-models.
+  local-ai:
+    build:
+      context: ./infra/local-ai
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      SPEECH_NUM_PARALLEL: ${LOCAL_AI_SPEECH_PARALLEL:-2}
+    volumes:
+      - local-ai-models:/models
+    ports:
+      - "8090:8080"
+    networks: [ccaas-net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # ---- Telephony tier (Section 8/18) ---------------------------------------------------
+  coturn:
+    image: coturn/coturn:latest
+    command: >
+      -n --lt-cred-mech --realm=ccaas.local
+      --user=ccaas:ccaas_dev_password
+      --listening-port=3478
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+    networks: [ccaas-net]
+
+  asterisk:
+    build:
+      context: ./infra/asterisk
+    volumes:
+      - ./infra/asterisk/conf:/etc/asterisk
+      - asterisk-recordings:/var/spool/asterisk/recording
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "8088:8088" # ARI / WebSocket (ws://localhost:8088/ari)
+      - "8089:8089" # reserved for wss once TLS is configured
+      - "5038:5038" # AMI
+      - "10000-10100:10000-10100/udp" # RTP - keep in sync with infra/asterisk/conf/rtp.conf
+    networks: [ccaas-net]
+
+  # ---- Application tier ----------------------------------------------------------------
+  # depends_on uses condition: service_healthy (not just "container started") so the API/
+  # workers don't crash-loop racing SQL Server / RabbitMQ's slower startup - RabbitMqEventBus
+  # and the EF Core DbContext both connect eagerly rather than lazily/with retry.
+  ccaas-api:
+    build:
+      context: .
+      dockerfile: src/CCaaS.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DataProtection__KeyPath: /var/lib/ccaas/keys
+    volumes:
+      - dataprotection-keys:/var/lib/ccaas/keys
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      object-storage: { condition: service_healthy }
+      ollama: { condition: service_healthy }
+      ollama-init: { condition: service_completed_successfully }
+      local-ai: { condition: service_healthy }
+    ports:
+      - "5000:8080"
+    networks: [ccaas-net]
+
+  telephony-worker:
+    build:
+      context: .
+      dockerfile: src/CCaaS.Workers.Telephony/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Telephony__AriUsername: ${ASTERISK_ARI_USERNAME:-ccaas}
+      Telephony__AriPassword: ${ASTERISK_ARI_PASSWORD:-ccaas_dev_password}
+      Telephony__DefaultTenantId: ${CCAAS_DEMO_TENANT_ID:-3FA85F64-5717-4562-B3FC-2C963F66AFA6}
+      AiVoice__Mode: ${AI_VOICE_MODE:-Local}
+      AiVoice__MaxConcurrentCalls: ${AI_VOICE_MAX_CONCURRENT_CALLS:-2}
+    volumes:
+      - asterisk-recordings:/recordings
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      object-storage: { condition: service_healthy }
+      asterisk: { condition: service_started }
+      ollama: { condition: service_healthy }
+      ollama-init: { condition: service_completed_successfully }
+      local-ai: { condition: service_healthy }
+    networks: [ccaas-net]
+
+  channel-worker:
+    build:
+      context: .
+      dockerfile: src/CCaaS.Workers.Channel/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    networks: [ccaas-net]
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on: [ccaas-api]
+    networks: [ccaas-net]
+
+  # ---- Observability (Section 17) -------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    depends_on: [ccaas-api]
+    networks: [ccaas-net]
+
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"] # default login admin/admin
+    volumes: ["grafana-data:/var/lib/grafana"]
+    depends_on: [prometheus]
+    networks: [ccaas-net]

@@ -1,0 +1,28 @@
+# Without this file, `docker compose build` (context: .) copies your LOCAL bin/ and obj/
+# folders into the Linux build container via `COPY src/ src/`. If you've ever run
+# `dotnet build`/`dotnet restore` on Windows in this repo, those folders contain
+# Windows-specific paths (e.g. project.assets.json pointing at
+# "C:\Program Files (x86)\Microsoft Visual Studio\Shared\NuGetPackages"). Copying them on top
+# of the container's own (correct, Linux) restore output is exactly what caused:
+#   NuGet.Packaging.Core.PackagingException: Unable to find fallback package folder
+#   'C:\Program Files (x86)\Microsoft Visual Studio\Shared\NuGetPackages'
+# Excluding bin/obj from the build context fixes it - the container always restores its own
+# Linux-native copies instead of inheriting your host's.
+
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+
+# Frontend - not needed in any .NET service's build context, and node_modules is huge
+frontend/node_modules/
+frontend/.angular/
+frontend/dist/
+
+# VCS / editor cruft
+.git/
+.gitignore
+**/*.user
+
+# Don't ship local env overrides into images
+.env

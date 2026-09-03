@@ -1,0 +1,29 @@
+<div class="login-page">
+  <form class="login-card" (ngSubmit)="submit()">
+    <h1>Omnichannel CCaaS</h1>
+    <p class="subtitle">Sign in to your tenant</p>
+
+    <label>
+      Tenant ID
+      <input type="text" name="tenantId" [(ngModel)]="tenantId" placeholder="GUID" required />
+    </label>
+
+    <label>
+      Email
+      <input type="email" name="email" [(ngModel)]="email" required />
+    </label>
+
+    <label>
+      Password
+      <input type="password" name="password" [(ngModel)]="password" required />
+    </label>
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Signing in...' : 'Sign in' }}
+    </button>
+  </form>
+</div>

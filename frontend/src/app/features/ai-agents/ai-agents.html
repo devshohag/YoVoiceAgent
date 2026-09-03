@@ -1,0 +1,33 @@
+<section class="page">
+  <header>
+    <p class="eyebrow">AI CONFIGURATION</p>
+    <h1>Voice agents</h1>
+    <p>Create tenant-scoped agents. The development provider works without an API key.</p>
+  </header>
+
+  <form (ngSubmit)="create()" class="card">
+    <label>Name <input name="name" [(ngModel)]="name" required /></label>
+    <div class="row">
+      <label>Language <input name="language" [(ngModel)]="language" /></label>
+      <label>Voice <input name="voiceName" [(ngModel)]="voiceName" /></label>
+    </div>
+    <label>Welcome message <textarea name="welcomeMessage" [(ngModel)]="welcomeMessage"></textarea></label>
+    <label>System prompt <textarea name="systemPrompt" [(ngModel)]="systemPrompt" rows="5" required></textarea></label>
+    <button type="submit">Create agent</button>
+    @if (message()) { <p class="message">{{ message() }}</p> }
+  </form>
+
+  <div class="grid">
+    @for (agent of agents(); track agent.id) {
+      <article class="card agent">
+        <span class="status">{{ agent.isActive ? 'ACTIVE' : 'DISABLED' }}</span>
+        <h2>{{ agent.name }}</h2>
+        <p>{{ agent.language }} · {{ agent.voiceName }}</p>
+        <blockquote>{{ agent.welcomeMessage }}</blockquote>
+        <a class="test-link" [routerLink]="['/ai-agent-test']" [queryParams]="{ agentId: agent.id }">Test this agent</a>
+      </article>
+    } @empty {
+      <article class="card">No AI agents yet.</article>
+    }
+  </div>
+</section>

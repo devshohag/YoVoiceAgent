@@ -1,0 +1,30 @@
+<section class="page">
+  <header><p class="eyebrow">DEVELOPMENT VOICE PIPELINE</p><h1>Asterisk ↔ AI Voice</h1>
+    <p>Mode: <strong>{{ processingMode() }}</strong>. Local mode runs fully in Docker and supports {{ maxConcurrentCalls() }} simultaneous calls.</p></header>
+  <section class="controls">
+    <label>Voice agent<select [(ngModel)]="selectedAgentId" [disabled]="running() || processingMode().toLowerCase() === 'local'">
+      @for (agent of agents(); track agent.id) { <option [value]="agent.id">{{ agent.name }}</option> }
+    </select></label>
+    @if (processingMode().toLowerCase() === 'local') {
+      <span class="state live">Local backend active — browser bridge not required</span>
+    } @else if (!running()) { <button (click)="start()" [disabled]="!selectedAgentId">Start Puter bridge</button> }
+    @else { <button class="stop" (click)="stop()">Stop bridge</button> }
+    @if (processingMode().toLowerCase() !== 'local') { <span class="state" [class.live]="running()">{{ status() }}</span> }
+  </section>
+  @if (processingMode().toLowerCase() === 'local') {
+    <p class="warning">Free local development: Faster-Whisper STT, Ollama LLM and Piper TTS. Keep Docker services running; this page may be closed.</p>
+  } @else {
+    <p class="warning">Development only: Puter may request sign-in. Keep this page open while it processes each turn.</p>
+  }
+  @if (error()) { <p class="error">{{ error() }}</p> }
+  <div class="cards">
+    @for (card of cards(); track card.callSessionId) {
+      <article><div class="card-head"><strong>Caller {{ card.fromNumber }}</strong><span>{{ card.status }}</span></div>
+        @if (card.transcript) { <p><b>Caller:</b> {{ card.transcript }}</p> }
+        @if (card.reply) { <p class="reply"><b>AI:</b> {{ card.reply }}</p> }
+        @if (card.error) { <p class="error">{{ card.error }}</p> }
+        <small>Call {{ card.callSessionId }}</small>
+      </article>
+    } @empty { <div class="empty">Call 7000 from MicroSIP. Local mode processes each caller independently in the backend.</div> }
+  </div>
+</section>

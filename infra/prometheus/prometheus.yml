@@ -1,0 +1,10 @@
+# Section 17: "Prometheus metrics expose API latency/errors, queue depth, worker failures,
+# active calls, channel delivery failures, Asterisk health and storage usage."
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "ccaas-api"
+    static_configs:
+      - targets: ["ccaas-api:8080"]
+    metrics_path: /metrics

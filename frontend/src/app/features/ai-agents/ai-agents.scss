@@ -1,0 +1,14 @@
+.page { max-width: 1050px; margin: 0 auto; color: #14213d; }
+.eyebrow { color: #227c9d; font-size: .75rem; font-weight: 800; letter-spacing: .16em; }
+h1 { font-size: 2.2rem; margin: .25rem 0; }
+.card { background: white; border: 1px solid #dce5ec; border-radius: 14px; padding: 1.25rem; margin: 1rem 0; box-shadow: 0 8px 28px rgba(20,33,61,.06); }
+label { display: grid; gap: .4rem; margin-bottom: 1rem; font-weight: 650; }
+input, textarea { border: 1px solid #b9c8d4; border-radius: 8px; padding: .75rem; font: inherit; }
+.row, .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+button { background: #14213d; color: white; border: 0; border-radius: 8px; padding: .75rem 1rem; cursor: pointer; }
+.status { color: #12805c; font-size: .72rem; font-weight: 800; }
+.agent h2 { margin-bottom: .25rem; }
+blockquote { border-left: 3px solid #ffb703; margin: 1rem 0 0; padding-left: .75rem; color: #536273; }
+.message { color: #227c9d; }
+.test-link { display: inline-block; margin-top: 1rem; color: #fff; background: #227c9d; border-radius: 8px; padding: .65rem .9rem; text-decoration: none; font-weight: 700; }
+@media (max-width: 700px) { .row, .grid { grid-template-columns: 1fr; } }
