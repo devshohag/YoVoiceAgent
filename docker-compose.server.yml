@@ -91,7 +91,7 @@ services:
   ollama-init:
     image: ollama/ollama:latest
     environment: { OLLAMA_HOST: http://ollama:11434 }
-    command: ["pull", "${OLLAMA_MODEL:-qwen3:4b}"]
+    command: ["pull", "${OLLAMA_MODEL:-qwen3:1.7b}"]
     depends_on: { ollama: { condition: service_healthy } }
     networks: [ccaas-net]
 
@@ -134,6 +134,9 @@ services:
       Bootstrap__MigrateDatabase: "${BOOTSTRAP_MIGRATE_DATABASE:-false}"
       Bootstrap__SeedDemoData: "${BOOTSTRAP_SEED_DEMO_DATA:-false}"
       DataProtection__KeyPath: /var/lib/ccaas/keys
+      LocalAi__OllamaBaseUrl: http://ollama:11434
+      LocalAi__OllamaModel: "${OLLAMA_MODEL:-qwen3:1.7b}"
+      LocalAi__SpeechBaseUrl: http://local-ai:8080
     volumes: [dataprotection-keys:/var/lib/ccaas/keys]
     depends_on:
       sqlserver: { condition: service_healthy }

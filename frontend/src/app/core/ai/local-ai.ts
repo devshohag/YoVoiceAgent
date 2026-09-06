@@ -40,7 +40,9 @@ export class LocalAi {
           ? rawArguments : JSON.stringify(rawArguments ?? {});
         const resultJson = await executeTool(name, argumentsJson);
         onToolResult?.({ name, argumentsJson, resultJson });
-        messages.push({ role: 'tool', content: resultJson });
+        // Ollama requires tool_name when a tool result is sent back. Without it,
+        // the follow-up generation fails after the .NET tool has succeeded.
+        messages.push({ role: 'tool', content: resultJson, tool_name: name });
       }
     }
     throw new Error('Local AI exceeded the tool-processing limit.');

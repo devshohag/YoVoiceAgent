@@ -25,13 +25,15 @@ public sealed class LocalAiController : ControllerBase
             return BadRequest(new { message = "At least one chat message is required." });
 
         var baseUrl = (_configuration["LocalAi:OllamaBaseUrl"] ?? "http://ollama:11434").TrimEnd('/');
-        var model = _configuration["LocalAi:OllamaModel"] ?? "qwen3:4b";
+        var model = _configuration["LocalAi:OllamaModel"] ?? "qwen3:1.7b";
         var payload = new Dictionary<string, object?>
         {
             ["model"] = model,
             ["messages"] = request.Messages.Value,
             ["stream"] = false,
-            ["think"] = false
+            ["think"] = false,
+            ["keep_alive"] = "30m",
+            ["options"] = new { temperature = 0.2, num_predict = 160 }
         };
         if (request.Tools.HasValue && request.Tools.Value.ValueKind == JsonValueKind.Array)
             payload["tools"] = request.Tools.Value;
