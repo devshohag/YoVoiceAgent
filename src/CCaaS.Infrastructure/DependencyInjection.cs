@@ -93,6 +93,7 @@ public static class DependencyInjection
 
         // --- AI abstractions (Section 16 - disabled/no-op by default until you wire a provider) ---
         services.AddHttpClient("ollama");
+        services.AddHttpClient("local-ai-speech");
         services.AddScoped<IHandoffContextSummarizer, OllamaHandoffContextSummarizer>();
         services.AddScoped<DevelopmentAiProvider>();
         services.AddScoped<ISpeechToTextProvider>(sp => sp.GetRequiredService<DevelopmentAiProvider>());

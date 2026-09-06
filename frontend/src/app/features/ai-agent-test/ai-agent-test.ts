@@ -3,7 +3,8 @@ import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { PuterAi, PuterChatMessage, PuterToolDefinition } from '../../core/ai/puter-ai';
+import { PuterChatMessage, PuterToolDefinition } from '../../core/ai/puter-ai';
+import { LocalAi } from '../../core/ai/local-ai';
 import { environment } from '../../../environments/environment';
 import { AiAgent } from '../ai-agents/ai-agents';
 
@@ -44,7 +45,7 @@ export class AiAgentTest implements OnInit {
   private toolContext: string[] = [];
   private bookingAuthorized = false;
 
-  constructor(private readonly http: HttpClient, private readonly puterAi: PuterAi,
+  constructor(private readonly http: HttpClient, private readonly localAi: LocalAi,
     private readonly route: ActivatedRoute) {}
 
   async ngOnInit(): Promise<void> {
@@ -113,7 +114,7 @@ export class AiAgentTest implements OnInit {
         ...this.conversation().filter(item => item.role !== 'tool')
           .map(item => ({ role: item.role, content: item.content } as PuterChatMessage))
       ];
-      const reply = await this.puterAi.chatWithTools(
+      const reply = await this.localAi.chatWithTools(
         messages, APPOINTMENT_TOOLS,
         (name, argumentsJson) => this.executeApprovedTool(name, argumentsJson, text),
         tool => {
@@ -216,7 +217,7 @@ export class AiAgentTest implements OnInit {
     this.status.set('Creating voice response…');
     try {
       this.currentAudio?.pause();
-      const audio = await this.puterAi.createSpeech(text, language);
+      const audio = await this.localAi.createSpeech(text, language);
       this.currentAudio = audio;
       this.replyAudioUrl.set(audio.src);
       this.status.set('Voice response ready');
@@ -235,7 +236,7 @@ export class AiAgentTest implements OnInit {
     if (!file || !agent) return;
     this.error.set(''); this.transcribing.set(true); this.status.set('Transcribing customer audio…');
     try {
-      const transcript = await this.puterAi.transcribe(file, agent.language);
+      const transcript = await this.localAi.transcribe(file, agent.language);
       this.customerMessage = transcript;
       this.transcribing.set(false);
       this.status.set('Transcription ready');
@@ -249,7 +250,7 @@ export class AiAgentTest implements OnInit {
   }
 
   private describeError(error: unknown): string {
-    console.error('Puter operation failed:', error);
+    console.error('Local AI operation failed:', error);
     if (typeof error === 'string') return error;
     if (error instanceof Error) return error.message;
     const data = error as any;
@@ -257,6 +258,6 @@ export class AiAgentTest implements OnInit {
       ?? data?.description ?? data?.details?.message;
     if (message) return String(message);
     try { return JSON.stringify(error); }
-    catch { return 'Puter AI is unavailable. Sign in to Puter and try again.'; }
+    catch { return 'Local AI is unavailable. Check the Ollama and local speech services.'; }
   }
 }

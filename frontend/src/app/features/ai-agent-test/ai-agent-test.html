@@ -2,7 +2,7 @@
   <header>
     <p class="eyebrow">DEVELOPMENT PLAYGROUND</p>
     <h1>Test your AI voice agent</h1>
-    <p>Real AI responses through Puter.js. No OpenAI API key is stored in this project.</p>
+    <p>Private local AI responses through Ollama, Faster-Whisper and Piper. No cloud AI login or API key required.</p>
   </header>
   <div class="layout">
     <aside class="card settings">
@@ -59,7 +59,7 @@
           <button type="submit" [disabled]="loading() || transcribing() || !selectedAgent">Send to AI</button>
         </div>
       </form>
-      <p class="notice">Development only: Puter may ask you to sign in. Usage belongs to the signed-in Puter account.</p>
+      <p class="notice">Local development pipeline: Ollama LLM, Faster-Whisper speech recognition and Piper speech output.</p>
     </main>
   </div>
 </section>
