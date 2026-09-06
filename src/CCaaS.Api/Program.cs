@@ -174,7 +174,14 @@ try
     app.MapPrometheusScrapingEndpoint("/metrics");
 
     if (app.Environment.IsDevelopment()) app.UseHangfireDashboard("/hangfire");
-    HangfireJobs.ConfigureRecurringJobs(builder.Configuration.GetValue("Hangfire:EnableIncompleteJobs", false));
+    var recurringJobManager =
+    app.Services.GetRequiredService<IRecurringJobManager>();
+
+    HangfireJobs.ConfigureRecurringJobs(
+        recurringJobManager,
+        builder.Configuration.GetValue(
+            "Hangfire:EnableIncompleteJobs",
+            false));
 
     Log.Information("CCaaS API starting up");
     app.Run();
