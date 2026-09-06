@@ -13,51 +13,19 @@ namespace CCaaS.Infrastructure.BackgroundJobs;
 /// </summary>
 public static class HangfireJobs
 {
-    public static void ConfigureRecurringJobs(
-    IRecurringJobManager recurringJobs,
-    bool enableIncompleteJobs)
+    public static void ConfigureRecurringJobs(bool enableIncompleteJobs)
     {
         if (!enableIncompleteJobs)
         {
-            foreach (var id in new[]
-            {
-            "reminders-due-check",
-            "campaign-schedule-check",
-            "retention-cleanup",
-            "report-aggregation",
-            "provider-health-reconciliation"
-        })
-            {
-                recurringJobs.RemoveIfExists(id);
-            }
-
+            foreach (var id in new[] { "reminders-due-check", "campaign-schedule-check", "retention-cleanup", "report-aggregation", "provider-health-reconciliation" })
+                RecurringJob.RemoveIfExists(id);
             return;
         }
-
-        recurringJobs.AddOrUpdate(
-            "reminders-due-check",
-            () => ProcessDueReminders(),
-            Cron.Minutely);
-
-        recurringJobs.AddOrUpdate(
-            "campaign-schedule-check",
-            () => ProcessCampaignSchedules(),
-            "*/5 * * * *");
-
-        recurringJobs.AddOrUpdate(
-            "retention-cleanup",
-            () => RunRetentionCleanup(),
-            Cron.Daily);
-
-        recurringJobs.AddOrUpdate(
-            "report-aggregation",
-            () => AggregateDailyReports(),
-            "0 1 * * *");
-
-        recurringJobs.AddOrUpdate(
-            "provider-health-reconciliation",
-            () => ReconcileProviderHealth(),
-            "*/2 * * * *");
+        RecurringJob.AddOrUpdate("reminders-due-check", () => ProcessDueReminders(), Cron.Minutely);
+        RecurringJob.AddOrUpdate("campaign-schedule-check", () => ProcessCampaignSchedules(), "*/5 * * * *");
+        RecurringJob.AddOrUpdate("retention-cleanup", () => RunRetentionCleanup(), Cron.Daily);
+        RecurringJob.AddOrUpdate("report-aggregation", () => AggregateDailyReports(), "0 1 * * *"); // 01:00 daily
+        RecurringJob.AddOrUpdate("provider-health-reconciliation", () => ReconcileProviderHealth(), "*/2 * * * *");
     }
 
     public static void ProcessDueReminders() => throw new NotImplementedException("TODO: query followup.Reminders where RemindAt <= now and !IsSent, notify agent, mark IsSent.");

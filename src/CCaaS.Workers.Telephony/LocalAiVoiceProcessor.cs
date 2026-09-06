@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using CCaaS.Application.Ai;
+using CCaaS.Application.Appointment;
 using CCaaS.Application.Calls;
 using CCaaS.Domain.Ai;
 using CCaaS.Domain.Organization;
@@ -20,6 +21,7 @@ namespace CCaaS.Workers.Telephony;
 public sealed partial class LocalAiVoiceProcessor : BackgroundService
 {
     private const string Bucket = "call-recordings";
+    private const string AppointmentStatePrefix = "[APPOINTMENT_STATE]";
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHttpClientFactory _clients;
     private readonly IConfiguration _configuration;
@@ -172,12 +174,16 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             Text = transcript.Text, Sequence = sequence });
 
         var explicitHandoff = HumanRequestRegex().IsMatch(transcript.Text);
+        var appointment = explicitHandoff ? null : await TryHandleAppointmentAsync(
+            scope.ServiceProvider.GetRequiredService<IAppointmentService>(), source.TenantId,
+            priorTurns, transcript.Text, transcript.Language, ct);
         var decision = explicitHandoff
             ? new VoiceDecision(transcript.Language.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
                 ? "অনুগ্রহ করে অপেক্ষা করুন, আমি আপনাকে একজন মানব সহায়তা প্রতিনিধির সাথে সংযুক্ত করছি।"
                 : "Please hold while I connect you to a human support agent.", false, true,
                 "Caller explicitly requested a human agent.")
-            : await GenerateReplyAsync(llm, agent, priorTurns, transcript.Text, transcript.Language, ct);
+            : appointment?.Decision ?? TryFastCommonReply(transcript.Text, transcript.Language)
+                ?? await GenerateReplyAsync(llm, agent, priorTurns, transcript.Text, transcript.Language, ct);
         if (string.IsNullOrWhiteSpace(decision.Reply))
             decision = decision with { Reply = transcript.Language.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
                 ? "দুঃখিত, অনুগ্রহ করে কথাটি আবার বলুন।" : "Sorry, please say that again." };
@@ -194,6 +200,15 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
                 ? "এই মুহূর্তে কোনো মানব প্রতিনিধি available নেই। অনুগ্রহ করে কিছুক্ষণ পরে আবার চেষ্টা করুন।"
                 : "No human agent is available right now. Please try again shortly.", HandoffRequested = false };
             conversation.Outcome = "Human agent unavailable";
+        }
+
+        if (appointment is not null)
+        {
+            sequence++;
+            db.AiConversationTurns.Add(new AiConversationTurn { TenantId = source.TenantId,
+                AiConversationId = conversation.Id, Speaker = AiSpeaker.System,
+                Text = AppointmentStatePrefix + JsonSerializer.Serialize(appointment.State), Sequence = sequence });
+            conversation.Intent = "Appointment";
         }
 
         sequence++;
@@ -335,6 +350,182 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             root.TryGetProperty("handoffReason", out var reason) ? reason.GetString() : null);
     }
 
+    private async Task<AppointmentResult?> TryHandleAppointmentAsync(IAppointmentService appointments,
+        Guid tenantId, IReadOnlyList<AiConversationTurn> history, string input, string detectedLanguage,
+        CancellationToken ct)
+    {
+        var state = LoadAppointmentState(history);
+        if (state is null && !AppointmentIntentRegex().IsMatch(input)) return null;
+
+        var bn = detectedLanguage.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
+            || BengaliTextRegex().IsMatch(input);
+        state ??= new AppointmentState("date-time", null, null, null, null, null, bn);
+        state = state with { Bengali = state.Bengali || bn };
+
+        if (CancelRegex().IsMatch(input))
+            return Result(state with { Stage = "cancelled" }, state.Bengali
+                ? "অ্যাপয়েন্টমেন্ট অনুরোধটি বাতিল করা হয়েছে। আর কিছুতে সাহায্য করতে পারি?"
+                : "The appointment request has been cancelled. Can I help with anything else?");
+
+        var localDate = ParseDate(input);
+        var localTime = ParseTime(input);
+        if (state.Date is null && localDate is not null) state = state with { Date = localDate };
+        if (state.Date is null)
+            return Result(state with { Stage = "date-time" }, state.Bengali
+                ? "কোন তারিখে অ্যাপয়েন্টমেন্ট চান? আজ, আগামীকাল, অথবা তারিখটি বলুন।"
+                : "What date would you like the appointment? You can say today, tomorrow, or a date.");
+
+        if (state.SlotId is null)
+        {
+            var slots = await appointments.GetAvailabilityAsync(tenantId, DateOnly.Parse(state.Date), ct);
+            if (slots.Count == 0)
+                return Result(state with { Stage = "date-time" }, state.Bengali
+                    ? $"{FormatDate(state.Date)} তারিখে কোনো সময় খালি নেই। অন্য একটি তারিখ বলুন।"
+                    : $"There are no available slots on {FormatDate(state.Date)}. Please choose another date.");
+
+            var zone = ResolveAppointmentTimeZone();
+            AvailableAppointmentSlot? selected = null;
+            if (localTime is not null)
+                selected = slots.OrderBy(x => Math.Abs((TimeZoneInfo.ConvertTimeFromUtc(x.StartsAtUtc, zone).TimeOfDay - localTime.Value).TotalMinutes))
+                    .FirstOrDefault(x => Math.Abs((TimeZoneInfo.ConvertTimeFromUtc(x.StartsAtUtc, zone).TimeOfDay - localTime.Value).TotalMinutes) <= 20);
+            if (selected is null)
+            {
+                var choices = string.Join(", ", slots.Take(4).Select(x =>
+                    TimeZoneInfo.ConvertTimeFromUtc(x.StartsAtUtc, zone).ToString("h:mm tt")));
+                return Result(state with { Stage = "date-time" }, state.Bengali
+                    ? $"খালি সময়গুলো হলো {choices}। কোন সময়টি চান?"
+                    : $"Available times are {choices}. Which time would you like?");
+            }
+            state = state with { SlotId = selected.SlotId, SlotTimeUtc = selected.StartsAtUtc, Stage = "name" };
+        }
+
+        var phone = ParsePhone(input);
+        var name = ParseName(input, state.Stage == "name");
+        if (state.CustomerName is null && name is not null) state = state with { CustomerName = name };
+        if (state.Contact is null && phone is not null) state = state with { Contact = phone };
+        if (state.CustomerName is null)
+            return Result(state with { Stage = "name" }, state.Bengali
+                ? "অ্যাপয়েন্টমেন্টটি কার নামে করব?"
+                : "What name should I use for the appointment?");
+        if (state.Contact is null)
+            return Result(state with { Stage = "contact" }, state.Bengali
+                ? $"ধন্যবাদ {state.CustomerName}। আপনার ফোন নম্বরটি বলুন।"
+                : $"Thank you, {state.CustomerName}. What is your phone number?");
+
+        if (state.Stage != "confirm")
+        {
+            state = state with { Stage = "confirm" };
+            var when = FormatSlot(state.SlotTimeUtc!.Value);
+            return Result(state, state.Bengali
+                ? $"{state.CustomerName} নামে {when}-এর অ্যাপয়েন্টমেন্ট নিশ্চিত করব? হ্যাঁ অথবা না বলুন।"
+                : $"Shall I confirm the appointment for {state.CustomerName} at {when}? Please say yes or no.");
+        }
+
+        if (!ConfirmRegex().IsMatch(input))
+            return Result(state, state.Bengali ? "বুকিং নিশ্চিত করতে হ্যাঁ, অথবা বাতিল করতে না বলুন।"
+                : "Please say yes to confirm the booking, or no to cancel.");
+
+        try
+        {
+            var booking = await appointments.BookAsync(tenantId,
+                new BookAppointmentCommand(state.SlotId!.Value, state.CustomerName, state.Contact, state.Purpose), ct);
+            state = state with { Stage = "booked" };
+            return Result(state, state.Bengali
+                ? $"আপনার অ্যাপয়েন্টমেন্ট নিশ্চিত হয়েছে। বুকিং রেফারেন্স {booking.BookingReference}। ধন্যবাদ।"
+                : $"Your appointment is confirmed. Booking reference {booking.BookingReference}. Thank you.", true);
+        }
+        catch (InvalidOperationException)
+        {
+            state = state with { SlotId = null, SlotTimeUtc = null, Stage = "date-time" };
+            return Result(state, state.Bengali
+                ? "দুঃখিত, সময়টি ইতিমধ্যে বুক হয়েছে। অন্য সময় বলুন।"
+                : "Sorry, that slot was just booked. Please choose another time.");
+        }
+    }
+
+    private static VoiceDecision? TryFastCommonReply(string input, string language)
+    {
+        var bn = language.StartsWith("bn", StringComparison.OrdinalIgnoreCase) || BengaliTextRegex().IsMatch(input);
+        if (GreetingRegex().IsMatch(input))
+            return new VoiceDecision(bn
+                ? "স্বাগতম। আমি অ্যাপয়েন্টমেন্ট বুক করা, সময় দেখা এবং সাধারণ সহায়তা দিতে পারি। আপনি কী করতে চান?"
+                : "Welcome. I can check availability, book appointments, and provide general help. What would you like to do?",
+                false, false, null);
+        if (GoodbyeRegex().IsMatch(input))
+            return new VoiceDecision(bn ? "ধন্যবাদ। ভালো থাকবেন।" : "Thank you. Goodbye.", true, false, null);
+        return null;
+    }
+
+    private AppointmentState? LoadAppointmentState(IReadOnlyList<AiConversationTurn> history)
+    {
+        var text = history.LastOrDefault(x => x.Speaker == AiSpeaker.System
+            && x.Text.StartsWith(AppointmentStatePrefix, StringComparison.Ordinal))?.Text;
+        if (text is null) return null;
+        try { return JsonSerializer.Deserialize<AppointmentState>(text[AppointmentStatePrefix.Length..]); }
+        catch (JsonException) { return null; }
+    }
+
+    private TimeZoneInfo ResolveAppointmentTimeZone()
+    {
+        var id = _configuration["AiVoice:AppointmentTimeZoneId"] ?? "Asia/Dhaka";
+        try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+        catch (TimeZoneNotFoundException) { return TimeZoneInfo.Utc; }
+    }
+
+    private string FormatSlot(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(utc, ResolveAppointmentTimeZone())
+        .ToString("dddd, d MMMM 'at' h:mm tt");
+    private static string FormatDate(string date) => DateOnly.Parse(date).ToString("d MMMM yyyy");
+    private static AppointmentResult Result(AppointmentState state, string reply, bool end = false)
+        => new(state, new VoiceDecision(reply, end, false, null));
+
+    private static string? ParseDate(string input)
+    {
+        if (Regex.IsMatch(input, @"আগামীকাল|tomorrow", RegexOptions.IgnoreCase)) return DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)).ToString("yyyy-MM-dd");
+        if (Regex.IsMatch(input, @"আজ|today", RegexOptions.IgnoreCase)) return DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+        var match = Regex.Match(ToAsciiDigits(input), @"\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b");
+        return match.Success && DateOnly.TryParse($"{match.Groups[1].Value}-{match.Groups[2].Value}-{match.Groups[3].Value}", out var date)
+            ? date.ToString("yyyy-MM-dd") : null;
+    }
+
+    private static TimeSpan? ParseTime(string input)
+    {
+        var value = ToAsciiDigits(input);
+        var match = Regex.Match(value, @"(?<!\d)(\d{1,2})(?::(\d{2}))?\s*(am|pm|টা|টায়|টায়)?", RegexOptions.IgnoreCase);
+        if (!match.Success || !int.TryParse(match.Groups[1].Value, out var hour)) return null;
+        var minute = int.TryParse(match.Groups[2].Value, out var parsedMinute) ? parsedMinute : 0;
+        var suffix = match.Groups[3].Value.ToLowerInvariant();
+        var afternoon = suffix == "pm" || Regex.IsMatch(input, "দুপুর|বিকাল|সন্ধ্যা|রাত");
+        if (afternoon && hour < 12) hour += 12;
+        if (suffix == "am" && hour == 12) hour = 0;
+        return hour is >= 0 and < 24 && minute is >= 0 and < 60 ? new TimeSpan(hour, minute, 0) : null;
+    }
+
+    private static string? ParsePhone(string input)
+    {
+        var match = Regex.Match(ToAsciiDigits(input), @"(?<!\d)(?:\+?88)?0?1[3-9]\d{8}(?!\d)");
+        return match.Success ? match.Value : null;
+    }
+
+    private static string? ParseName(string input, bool acceptWholeInput)
+    {
+        var match = Regex.Match(input, @"(?:my\s+name\s+is|name\s+is|আমার\s+নাম)\s*[:,-]?\s*([\p{L} .'-]{2,60})", RegexOptions.IgnoreCase);
+        if (match.Success) return match.Groups[1].Value.Trim();
+        if (!acceptWholeInput || ParsePhone(input) is not null || input.Length > 60 || Regex.IsMatch(input, @"\d")) return null;
+        return input.Trim(' ', '.', ',', '?');
+    }
+
+    private static string ToAsciiDigits(string value)
+    {
+        const string bengali = "০১২৩৪৫৬৭৮৯";
+        var chars = value.ToCharArray();
+        for (var index = 0; index < chars.Length; index++)
+        {
+            var digit = bengali.IndexOf(chars[index]);
+            if (digit >= 0) chars[index] = (char)('0' + digit);
+        }
+        return new string(chars);
+    }
+
     private async Task<Stream> SynthesizeAsync(Provider provider, string text, string language,
         string voice, CancellationToken ct)
     {
@@ -371,6 +562,22 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
     private sealed record Provider(string BaseUrl, string Model, int TimeoutSeconds);
     private sealed record Transcript(string Text, string Language);
     private sealed record VoiceDecision(string Reply, bool EndCall, bool HandoffRequested, string? HandoffReason);
+    private sealed record AppointmentResult(AppointmentState State, VoiceDecision Decision);
+    private sealed record AppointmentState(string Stage, string? Date, Guid? SlotId, DateTime? SlotTimeUtc,
+        string? CustomerName, string? Contact, bool Bengali, string? Purpose = null);
+
+    [GeneratedRegex(@"appointment|book(?:ing)?|schedule|doctor|অ্যাপয়েন্টমেন্ট|এপয়েন্টমেন্ট|বুকিং|ডাক্তার|সময়\s*(?:চাই|নিতে)", RegexOptions.IgnoreCase)]
+    private static partial Regex AppointmentIntentRegex();
+    [GeneratedRegex(@"[\u0980-\u09FF]")]
+    private static partial Regex BengaliTextRegex();
+    [GeneratedRegex(@"\b(yes|confirm|book|okay|ok)\b|হ্যাঁ|হ্যা|নিশ্চিত|বুক\s*কর", RegexOptions.IgnoreCase)]
+    private static partial Regex ConfirmRegex();
+    [GeneratedRegex(@"\b(no|cancel|stop)\b|(?:^|\s)না(?:\s|$|[।,.!?])|বাতিল", RegexOptions.IgnoreCase)]
+    private static partial Regex CancelRegex();
+    [GeneratedRegex(@"^\s*(hello|hi|hey|assalamu alaikum|হ্যালো|হাই|সালাম|আসসালামু আলাইকুম)[।,.!?\s]*$", RegexOptions.IgnoreCase)]
+    private static partial Regex GreetingRegex();
+    [GeneratedRegex(@"\b(goodbye|bye|thank you|thanks)\b|বিদায়|ধন্যবাদ", RegexOptions.IgnoreCase)]
+    private static partial Regex GoodbyeRegex();
 
     [GeneratedRegex(@"\b(human|operator|representative|supervisor|live\s+(person|agent)|real\s+(person|agent)|transfer\s+me)\b|মানুষ|হিউম্যান|এজেন্ট|অপারেটর|প্রতিনিধি|সুপারভাইজার|কথা\s*বলতে\s*চাই|কল\s*ট্রান্সফার", RegexOptions.IgnoreCase)]
     private static partial Regex HumanRequestRegex();

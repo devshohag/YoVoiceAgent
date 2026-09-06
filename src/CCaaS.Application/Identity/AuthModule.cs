@@ -180,57 +180,29 @@ public class AuthService : IAuthService
         return new AuthResult(true, newAccessToken, newRefreshToken, null);
     }
 
-    public async Task<ChangePasswordResult> ChangePasswordAsync(
-        Guid userId,
-        ChangePasswordRequest request,
-        CancellationToken ct = default)
+    public async Task<ChangePasswordResult> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.CurrentPassword))
-            return new ChangePasswordResult(false, "Current password is required.");
-
+            return new(false, "Current password is required.");
         if (request.NewPassword != request.ConfirmPassword)
-            return new ChangePasswordResult(false, "New password and confirmation do not match.");
-
-        if (!IsStrongPassword(request.NewPassword))
-        {
-            return new ChangePasswordResult(false,
-                "New password must be at least 12 characters and include uppercase, lowercase, number, and special characters.");
-        }
+            return new(false, "New password and confirmation do not match.");
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 12
+            || !request.NewPassword.Any(char.IsUpper) || !request.NewPassword.Any(char.IsLower)
+            || !request.NewPassword.Any(char.IsDigit) || !request.NewPassword.Any(ch => !char.IsLetterOrDigit(ch)))
+            return new(false, "New password must be at least 12 characters and include uppercase, lowercase, number, and special characters.");
 
         var user = await _users.FirstOrDefaultAsync(u => u.Id == userId, ct);
-        if (user is null || !user.IsActive)
-            return new ChangePasswordResult(false, "User account is unavailable.");
-
-        if (!_passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
-            return new ChangePasswordResult(false, "Current password is incorrect.");
-
-        if (_passwordHasher.Verify(request.NewPassword, user.PasswordHash))
-            return new ChangePasswordResult(false, "New password must be different from the current password.");
+        if (user is null || !user.IsActive) return new(false, "User account is unavailable.");
+        if (!_passwordHasher.Verify(request.CurrentPassword, user.PasswordHash)) return new(false, "Current password is incorrect.");
+        if (_passwordHasher.Verify(request.NewPassword, user.PasswordHash)) return new(false, "New password must be different from the current password.");
 
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
         _users.Update(user);
-
-        var activeRefreshTokens = await _refreshTokens.ToListAsync(
-            _refreshTokens.Query().Where(t => t.UserId == userId && t.RevokedAt == null), ct);
-
-        var revokedAt = DateTime.UtcNow;
-        foreach (var refreshToken in activeRefreshTokens)
-        {
-            refreshToken.RevokedAt = revokedAt;
-            _refreshTokens.Update(refreshToken);
-        }
-
+        var tokens = await _refreshTokens.ToListAsync(_refreshTokens.Query().Where(t => t.UserId == userId && t.RevokedAt == null), ct);
+        foreach (var token in tokens) { token.RevokedAt = DateTime.UtcNow; _refreshTokens.Update(token); }
         await _unitOfWork.SaveChangesAsync(ct);
-        return new ChangePasswordResult(true, null);
+        return new(true, null);
     }
-
-    private static bool IsStrongPassword(string password) =>
-        !string.IsNullOrWhiteSpace(password)
-        && password.Length >= 12
-        && password.Any(char.IsUpper)
-        && password.Any(char.IsLower)
-        && password.Any(char.IsDigit)
-        && password.Any(ch => !char.IsLetterOrDigit(ch));
 
     public async Task RevokeSessionAsync(Guid sessionId, CancellationToken ct = default)
     {

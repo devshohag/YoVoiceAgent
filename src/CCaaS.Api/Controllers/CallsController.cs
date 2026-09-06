@@ -237,26 +237,10 @@ public class CallsController : ApiControllerBase
                 && (call.CustomerId != null ? x.CustomerId == call.CustomerId : x.FromNumber == call.FromNumber))
             .OrderByDescending(x => x.StartedAt).Take(10)
             .Select(x => new { x.Id, x.StartedAt, x.EndedAt, status = x.Status.ToString(), x.DispositionId }).ToListAsync(ct);
-            return Ok(new
-            {
-                customer = customer is null
-              ? new
-              {
-                  id = (Guid?)null,
-                  name = $"Caller {call.FromNumber}",
-                  phone = (string?)call.FromNumber,
-                  email = (string?)null
-              }
-              : new
-              {
-                  id = (Guid?)customer.Id,
-                  name = customer.Name,
-                  phone = (string?)customer.Phone,
-                  email = customer.Email
-              },
-                notes,
-                history
-            });
+        return Ok(new { customer = customer is null
+                ? new { id = (Guid?)null, name = $"Caller {call.FromNumber}", phone = call.FromNumber, email = (string?)null }
+                : new { id = (Guid?)customer.Id, name = customer.Name, phone = customer.Phone, email = customer.Email },
+            notes, history });
     }
 
     [Authorize(Roles = "Supervisor,TenantAdmin,PlatformAdmin")]

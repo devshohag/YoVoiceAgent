@@ -25,9 +25,3 @@ runtime/
 backups/
 __pycache__/
 *.pyc
-.env
-root.env
-.env
-root.env
-.env
-root.env

@@ -48,21 +48,14 @@ public class AuthController : ControllerBase
         var result = await _authService.RefreshAsync(refreshToken, ct);
         return result.Succeeded ? Ok(new { result.AccessToken, result.RefreshToken }) : Unauthorized(result.Error);
     }
-
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)
     {
-        var userIdValue = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-        if (!Guid.TryParse(userIdValue, out var userId))
-            return Unauthorized("Authenticated user identity is invalid.");
-
+        var value = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(value, out var userId)) return Unauthorized("Authenticated user identity is invalid.");
         var result = await _authService.ChangePasswordAsync(userId, request, ct);
-        if (!result.Succeeded)
-            return BadRequest(result.Error);
-
+        if (!result.Succeeded) return BadRequest(result.Error);
         _logger.LogInformation("Password changed and refresh tokens revoked for UserId={UserId}", userId);
         return Ok(new { message = "Password changed successfully. Please sign in again." });
     }
