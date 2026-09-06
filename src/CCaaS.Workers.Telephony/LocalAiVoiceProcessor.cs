@@ -255,14 +255,21 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             "Local", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task<Provider> ResolveProviderAsync(CcaasDbContext db, Guid tenantId,
+    private async Task<Provider> ResolveProviderAsync(CcaasDbContext db, Guid tenantId,
         string capability, string fallbackUrl, string fallbackModel, CancellationToken ct)
     {
         var profile = await db.AiProviderProfiles.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.TenantId == tenantId && !x.IsDeleted && x.IsActive && x.Capability == capability)
             .OrderBy(x => x.Priority).FirstOrDefaultAsync(ct);
-        if (profile is null) return new Provider(fallbackUrl, fallbackModel, 60);
+        var configuredModel = string.Equals(capability, "Llm", StringComparison.OrdinalIgnoreCase)
+            ? _configuration["AiVoice:Model"] : null;
+        var configuredTimeout = _configuration.GetValue<int?>("AiVoice:ProviderTimeoutSeconds");
+        if (profile is null)
+            return new Provider(fallbackUrl, configuredModel ?? fallbackModel,
+                Math.Clamp(configuredTimeout ?? 120, 30, 300));
         var baseUrl = profile.BaseUrl.TrimEnd('/');
+        if (!string.IsNullOrWhiteSpace(configuredModel))
+            return new Provider(baseUrl, configuredModel, Math.Clamp(configuredTimeout ?? 120, 30, 300));
         if (capability == "Llm" && baseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
             baseUrl = baseUrl[..^3];
         return new Provider(baseUrl, profile.Model, profile.TimeoutSeconds);
@@ -315,8 +322,8 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 10, 300)));
         using var response = await _clients.CreateClient("ollama").PostAsJsonAsync(provider.BaseUrl + "/api/chat",
-            new { model = provider.Model, messages, stream = false, format = "json",
-                options = new { temperature = 0.2, num_predict = 180 } }, timeout.Token);
+            new { model = provider.Model, messages, stream = false, format = "json", think = false,
+                keep_alive = "30m", options = new { temperature = 0.2, num_predict = 120 } }, timeout.Token);
         response.EnsureSuccessStatusCode();
         using var envelope = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
         var content = envelope.RootElement.GetProperty("message").GetProperty("content").GetString() ?? "{}";

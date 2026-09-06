@@ -153,6 +153,8 @@ services:
       <<: *app-env
       AiVoice__Mode: Local
       AiVoice__MaxConcurrentCalls: "${AI_VOICE_MAX_CONCURRENT_CALLS:-1}"
+      AiVoice__Model: "${OLLAMA_MODEL:-qwen3:1.7b}"
+      AiVoice__ProviderTimeoutSeconds: "${AI_VOICE_PROVIDER_TIMEOUT_SECONDS:-120}"
     volumes: [asterisk-recordings:/recordings]
     depends_on:
       sqlserver: { condition: service_healthy }
