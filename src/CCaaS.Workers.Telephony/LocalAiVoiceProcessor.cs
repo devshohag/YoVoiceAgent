@@ -70,14 +70,14 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
                 && x.EventType == "LocalAiTurnProcessed" && x.PayloadJson != null
                 && x.PayloadJson.Contains(marker), ct);
             if (done || !_inflight.TryAdd(source.Id, 0)) continue;
-            tasks.Add(ProcessGuardedAsync(source.Id, ct));
+            tasks.Add(ProcessGuardedAsync(source.Id, source.CallSessionId, ct));
         }
         if (tasks.Count > 0) await Task.WhenAll(tasks);
     }
 
-    private async Task ProcessGuardedAsync(Guid sourceEventId, CancellationToken ct)
+    private async Task ProcessGuardedAsync(Guid sourceEventId, Guid callId, CancellationToken ct)
     {
-        await _capacity.WaitAsync(ct);
+        await VoiceTiming.Run(_logger, callId, sourceEventId, "worker_queue", () => _capacity.WaitAsync(ct));
         try
         {
             await ProcessTurnAsync(sourceEventId, ct);
@@ -140,15 +140,23 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
                 JsonSerializer.Serialize(new { sourceEventId, skipped = "superseded-recording" }), ct);
             return;
         }
+        _logger.LogInformation("VOICE_EVENT_LINK {Link}", JsonSerializer.Serialize(new {
+            call_id = session.Id, turn_id = recordingId, source_event_id = sourceEventId,
+            source_created_at = source.OccurredAt, processing_started_at = DateTime.UtcNow,
+            event_age_ms = (DateTime.UtcNow - source.OccurredAt).TotalMilliseconds }));
         var recording = await db.Recordings.IgnoreQueryFilters().AsNoTracking()
             .SingleAsync(x => x.Id == recordingId && x.TenantId == source.TenantId && !x.IsDeleted, ct);
 
+        _logger.LogInformation("VOICE_RECORDING_LINK {Link}", JsonSerializer.Serialize(new {
+            call_id = session.Id, turn_id = recordingId,
+            recording_name = Path.GetFileNameWithoutExtension(recording.ObjectStorageKey),
+            audio_duration_seconds = recording.DurationSeconds }));
         var stt = await ResolveProviderAsync(db, source.TenantId, "Stt", "http://local-ai:8080", "small", ct);
         var llm = await ResolveProviderAsync(db, source.TenantId, "Llm", "http://ollama:11434", "qwen3:4b", ct);
         var tts = await ResolveProviderAsync(db, source.TenantId, "Tts", "http://local-ai:8080", "piper", ct);
         var storage = scope.ServiceProvider.GetRequiredService<IObjectStorageService>();
-        await using var callerAudio = await storage.DownloadAsync(Bucket, recording.ObjectStorageKey, ct);
-        var transcript = await TranscribeAsync(stt, callerAudio, ct);
+        await using var callerAudio = await VoiceTiming.Run(_logger, session.Id, recordingId, "recording_download", () => storage.DownloadAsync(Bucket, recording.ObjectStorageKey, ct));
+        var transcript = await VoiceTiming.Run(_logger, session.Id, recordingId, "stt_http_batch", () => TranscribeAsync(stt, callerAudio, ct));
         if (string.IsNullOrWhiteSpace(transcript.Text))
             throw new InvalidOperationException("Local speech recognition returned an empty transcript.");
 
@@ -173,6 +181,8 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             AiConversationId = conversation.Id, Speaker = AiSpeaker.Customer,
             Text = transcript.Text, Sequence = sequence });
 
+        VoiceTiming.Current.Value = (session.Id.ToString(), recordingId.ToString()!);
+        using var decisionTiming = new VoiceTiming(_logger, session.Id, recordingId, "decision");
         var explicitHandoff = HumanRequestRegex().IsMatch(transcript.Text);
         var appointment = explicitHandoff ? null : await TryHandleAppointmentAsync(
             scope.ServiceProvider.GetRequiredService<IAppointmentService>(), source.TenantId,
@@ -188,6 +198,8 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             decision = decision with { Reply = transcript.Language.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
                 ? "দুঃখিত, অনুগ্রহ করে কথাটি আবার বলুন।" : "Sorry, please say that again." };
 
+        decisionTiming.Complete();
+        decisionTiming.Dispose();
         conversation.DetectedLanguage = transcript.Language;
         conversation.UpdatedAt = DateTime.UtcNow;
 
@@ -244,9 +256,9 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
         }
 
         var responseName = $"ccaas-{session.Id:N}-local-ai-{recordingId:N}";
-        await using var responseAudio = await SynthesizeAsync(tts, decision.Reply, transcript.Language, agent.VoiceName, ct);
+        await using var responseAudio = await VoiceTiming.Run(_logger, session.Id, recordingId, "tts_http_batch", () => SynthesizeAsync(tts, decision.Reply, transcript.Language, agent.VoiceName, ct));
         var objectKey = $"{source.TenantId:N}/calls/{session.Id:N}/responses/{responseName}.wav";
-        await storage.UploadAsync(Bucket, objectKey, responseAudio, "audio/wav", ct);
+        await VoiceTiming.Run(_logger, session.Id, recordingId, "response_upload", () => storage.UploadAsync(Bucket, objectKey, responseAudio, "audio/wav", ct));
         await db.SaveChangesAsync(ct);
 
         var calls = scope.ServiceProvider.GetRequiredService<ICallService>();
@@ -316,8 +328,9 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
         using var form = new MultipartFormDataContent();
         form.Add(new StreamContent(audio), "file", "caller.wav");
         form.Add(new StringContent("auto"), "language");
-        using var response = await _clients.CreateClient("local-ai")
-            .PostAsync(provider.BaseUrl + "/v1/audio/transcriptions", form, timeout.Token);
+        using var request = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl + "/v1/audio/transcriptions") { Content = form };
+        AddTimingHeaders(request);
+        using var response = await _clients.CreateClient("local-ai").SendAsync(request, timeout.Token);
         response.EnsureSuccessStatusCode();
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
         return new Transcript(json.RootElement.GetProperty("text").GetString()?.Trim() ?? "",
@@ -327,6 +340,7 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
     private async Task<VoiceDecision> GenerateReplyAsync(Provider provider, AiAgent agent,
         IReadOnlyList<AiConversationTurn> history, string latest, string language, CancellationToken ct)
     {
+        using var llmTiming = new VoiceTiming(_logger, VoiceTiming.Current.Value?.Call ?? "unknown", VoiceTiming.Current.Value?.Turn ?? "unknown", "llm_http");
         var messages = new List<object> { new { role = "system", content =
             $"{agent.SystemPrompt}\nThis is a live phone call. Reply in the caller's language ({language}). " +
             "Use no more than two short spoken sentences and ask one question at a time. " +
@@ -344,6 +358,7 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
         var content = envelope.RootElement.GetProperty("message").GetProperty("content").GetString() ?? "{}";
         using var result = JsonDocument.Parse(content);
         var root = result.RootElement;
+        llmTiming.Complete();
         return new VoiceDecision(root.TryGetProperty("reply", out var reply) ? reply.GetString() ?? "" : "",
             root.TryGetProperty("endCall", out var end) && end.ValueKind == JsonValueKind.True,
             root.TryGetProperty("handoffRequested", out var handoff) && handoff.ValueKind == JsonValueKind.True,
@@ -531,9 +546,11 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 10, 300)));
-        using var response = await _clients.CreateClient("local-ai").PostAsJsonAsync(
-            provider.BaseUrl + "/v1/audio/speech", new { input = text,
-                language = language.StartsWith("bn", StringComparison.OrdinalIgnoreCase) ? "bn-BD" : "en-US", voice }, timeout.Token);
+        using var request = new HttpRequestMessage(HttpMethod.Post, provider.BaseUrl + "/v1/audio/speech")
+        { Content = JsonContent.Create(new { input = text,
+            language = language.StartsWith("bn", StringComparison.OrdinalIgnoreCase) ? "bn-BD" : "en-US", voice }) };
+        AddTimingHeaders(request);
+        using var response = await _clients.CreateClient("local-ai").SendAsync(request, timeout.Token);
         response.EnsureSuccessStatusCode();
         var memory = new MemoryStream();
         await response.Content.CopyToAsync(memory, timeout.Token);
@@ -557,6 +574,15 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             .Append($"Customer: {customer}").Append($"AI: {ai}");
         var value = string.Join('\n', lines);
         return value[..Math.Min(value.Length, 16_000)];
+    }
+
+    private static void AddTimingHeaders(HttpRequestMessage request)
+    {
+        if (VoiceTiming.Current.Value is { } ids)
+        {
+            request.Headers.TryAddWithoutValidation("X-Call-Id", ids.Call);
+            request.Headers.TryAddWithoutValidation("X-Turn-Id", ids.Turn);
+        }
     }
 
     private sealed record Provider(string BaseUrl, string Model, int TimeoutSeconds);

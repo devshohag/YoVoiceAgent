@@ -41,6 +41,7 @@ public sealed class AriEventListener : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly AriClient _ari;
     private readonly ILogger<AriEventListener> _logger;
+    private readonly ConcurrentDictionary<string, VoiceTiming> _recordingTimers = new();
     private readonly ConcurrentDictionary<string, CallContext> _callsByChannel = new();
     private readonly ConcurrentDictionary<string, CallContext> _callsByRecording = new();
     private readonly ConcurrentDictionary<string, PlaybackContext> _playbacks = new();
@@ -318,6 +319,7 @@ public sealed class AriEventListener : BackgroundService
 
     private async Task StartRecordingAsync(CallContext context, CancellationToken ct)
     {
+        _recordingTimers[context.RecordingName] = new VoiceTiming(_logger, context.CallSessionId, context.RecordingName, "recording_including_silence");
         var maxDuration = _configuration.GetValue("Telephony:RecordingMaxDurationSeconds", 30);
         var maxSilence = _configuration.GetValue("Telephony:RecordingMaxSilenceSeconds", 6);
         await _ari.StartRecordingAsync(context.ChannelId, context.RecordingName,
@@ -334,6 +336,7 @@ public sealed class AriEventListener : BackgroundService
         if (!root.TryGetProperty("recording", out var recording)) return;
         var name = ReadString(recording, "name");
         if (name is null || !_callsByRecording.TryRemove(name, out var context)) return;
+        if (_recordingTimers.TryRemove(name, out var timer)) { timer.Complete(); timer.Dispose(); }
         var duration = ReadInt(recording, "duration");
         var recordingDirectory = _configuration["Telephony:RecordingDirectory"] ?? "/recordings";
         var localPath = Path.Combine(recordingDirectory, name + ".wav");
@@ -342,11 +345,11 @@ public sealed class AriEventListener : BackgroundService
         var calls = scope.ServiceProvider.GetRequiredService<ICallService>();
         try
         {
-            var file = await WaitForFileAsync(localPath, ct);
+            var file = await VoiceTiming.Run(_logger, context.CallSessionId, name, "recording_file_wait", () => WaitForFileAsync(localPath, ct));
             var bucket = _configuration["Telephony:RecordingBucket"] ?? "call-recordings";
             var objectKey = $"{context.TenantId:N}/calls/{context.CallSessionId:N}/{name}.wav";
-            await UploadWithRetryAsync(scope.ServiceProvider.GetRequiredService<IObjectStorageService>(),
-                bucket, objectKey, file.FullName, ct);
+            await VoiceTiming.Run(_logger, context.CallSessionId, name, "recording_upload", () => UploadWithRetryAsync(scope.ServiceProvider.GetRequiredService<IObjectStorageService>(),
+                bucket, objectKey, file.FullName, ct));
             var saved = await calls.AddRecordingAsync(context.TenantId, context.CallSessionId,
                 objectKey, duration, file.Length, ct);
             await calls.RecordEventAsync(context.TenantId, context.CallSessionId,
@@ -371,6 +374,7 @@ public sealed class AriEventListener : BackgroundService
     {
         var context = _callsByChannel.Values.FirstOrDefault(x => x.CallSessionId == callSessionId);
         if (context is null) return false;
+        using var deliveryTiming = new VoiceTiming(_logger, callSessionId, responseName, "response_delivery_to_ari_ack");
         var directory = _configuration["Telephony:RecordingDirectory"] ?? "/recordings";
         var path = Path.Combine(directory, responseName + ".wav");
         using var scope = _scopeFactory.CreateScope();
@@ -380,6 +384,8 @@ public sealed class AriEventListener : BackgroundService
             await source.CopyToAsync(target, ct);
 
         var playbackId = await _ari.PlayAsync(context.ChannelId, $"recording:{responseName}", ct);
+        deliveryTiming.Complete();
+        deliveryTiming.Dispose();
         _playbacks[playbackId] = new PlaybackContext(context, PlaybackPurpose.AiResponse,
             endCallAfterPlayback, handoffAfterPlayback, handoffExtension, handoffReason);
         await scope.ServiceProvider.GetRequiredService<ICallService>().RecordEventAsync(
@@ -425,6 +431,7 @@ public sealed class AriEventListener : BackgroundService
         var cause = ReadString(root, "cause_txt") ?? ReadString(root, "cause") ?? type;
         using var scope = _scopeFactory.CreateScope();
         var calls = scope.ServiceProvider.GetRequiredService<ICallService>();
+        if (_recordingTimers.TryRemove(context.RecordingName, out var unfinished)) unfinished.Dispose();
         await PersistFinalRecordingAsync(context, ct);
         await calls.RecordEventAsync(context.TenantId, context.CallSessionId, type, json, ct);
         await calls.EndCallAsync(context.TenantId, context.CallSessionId, cause, ct);
@@ -512,8 +519,8 @@ public sealed class AriEventListener : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var bucket = _configuration["Telephony:RecordingBucket"] ?? "call-recordings";
             var objectKey = $"{context.TenantId:N}/calls/{context.CallSessionId:N}/final/{context.FinalRecordingName}.wav";
-            await UploadWithRetryAsync(scope.ServiceProvider.GetRequiredService<IObjectStorageService>(),
-                bucket, objectKey, file.FullName, ct);
+            await VoiceTiming.Run(_logger, context.CallSessionId, context.FinalRecordingName, "final_recording_upload", () => UploadWithRetryAsync(scope.ServiceProvider.GetRequiredService<IObjectStorageService>(),
+                bucket, objectKey, file.FullName, ct));
             var calls = scope.ServiceProvider.GetRequiredService<ICallService>();
             var saved = await calls.AddRecordingAsync(context.TenantId, context.CallSessionId,
                 objectKey, 0, file.Length, ct);

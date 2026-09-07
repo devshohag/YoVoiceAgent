@@ -1,0 +1,12 @@
+[
+  {
+    "id": "human-call-001-turn-01",
+    "audio": "human-call-001-turn-01.wav",
+    "human_recorded": true,
+    "transcript": "REPLACE with the manually verified spoken words",
+    "intent": "book",
+    "entities": {"date": null, "time": null, "name": null, "phone": null},
+    "recorded_at": "2026-09-07T06:00:00Z",
+    "timezone": "Asia/Dhaka"
+  }
+]

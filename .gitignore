@@ -25,3 +25,8 @@ runtime/
 backups/
 __pycache__/
 *.pyc
+
+# Local human evaluation recordings and reports
+/voice-eval-data/
+__pycache__/
+*.pyc

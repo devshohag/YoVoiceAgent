@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "streaming_stt_final_with_queue_p95_ms": {"1": 1500, "3": 3000},
+  "meaningful_reply_p50_ms": {"1": 3000},
+  "meaningful_reply_p95_ms": {"1": 5000, "3": 8000},
+  "task_success_min": 0.9,
+  "wrong_or_duplicate_bookings_max": 0,
+  "minimum_labeled_cases": 20,
+  "automatic_paid_api_switch": false,
+  "batch_measurements_are_streaming_flush": false
+}
