@@ -271,6 +271,7 @@ public sealed class AriEventListener : BackgroundService
 
         await calls.RecordEventAsync(tenantId, session.Id, "StasisStart", json, ct);
         await _ari.AnswerAsync(channelId, ct);
+        await Task.Delay(1500, ct);
         await calls.RecordEventAsync(tenantId, session.Id, "Answered", null, ct);
 
         var welcome = _configuration["Telephony:WelcomeMedia"] ?? "sound:hello-world";
