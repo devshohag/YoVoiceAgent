@@ -13,11 +13,12 @@ internal sealed class VoiceTiming : IDisposable
     private readonly string _stage;
     private readonly DateTime _start = DateTime.UtcNow;
     private readonly long _tick = Stopwatch.GetTimestamp();
+    private readonly int? _concurrency;
     private bool _disposed;
     private string _outcome = "incomplete";
-    public VoiceTiming(ILogger logger, object call, object turn, string stage)
+    public VoiceTiming(ILogger logger, object call, object turn, string stage, int? concurrency = null)
     {
-        _logger = logger; _call = call; _turn = turn; _stage = stage;
+        _concurrency = concurrency; _logger = logger; _call = call; _turn = turn; _stage = stage;
         Write("started", null);
     }
     public void Complete() => _outcome = "success";
@@ -25,7 +26,7 @@ internal sealed class VoiceTiming : IDisposable
         JsonSerializer.Serialize(new { schema_version = 1, pipeline_version = "batch-v1",
             call_id = _call, turn_id = _turn, turn_no = (int?)null, stage = _stage,
             started_at = _start, ended_at = duration.HasValue ? DateTime.UtcNow : (DateTime?)null,
-            duration_ms = duration, concurrency = (int?)null, outcome }));
+            duration_ms = duration, concurrency = _concurrency, outcome }));
     public void Dispose() { if (_disposed) return; _disposed = true; Write(_outcome, Stopwatch.GetElapsedTime(_tick).TotalMilliseconds); }
     public static async Task<T> Run<T>(ILogger logger, object call, object turn, string stage, Func<Task<T>> action)
     {

@@ -54,33 +54,43 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
 
     private async Task PollAsync(CancellationToken ct)
     {
+        using var pollTiming = new VoiceTiming(_logger, "worker", "poll", "poll_cycle");
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CcaasDbContext>();
-        var candidates = await db.CallEvents.IgnoreQueryFilters().AsNoTracking()
-            .Where(x => !x.IsDeleted && x.EventType == "AwaitingVoiceBridge")
-            .OrderByDescending(x => x.OccurredAt).Take(100).ToListAsync(ct);
+        var candidates = await CCaaS.Infrastructure.Telephony.PendingVoiceTurns.Query(
+            db.CallEvents.IgnoreQueryFilters(), db.CallSessions.IgnoreQueryFilters())
+            .AsNoTracking().OrderByDescending(x => x.OccurredAt).Take(100).ToListAsync(ct);
         var tasks = new List<Task>();
         foreach (var source in candidates)
         {
             if (_inflight.ContainsKey(source.Id)) continue;
             if (!await IsLocalModeAsync(db, source.TenantId, ct)) continue;
-            var marker = source.Id.ToString("N");
+            var marker = source.Id.ToString("D");
+            var legacyMarker = source.Id.ToString("N");
             var done = await db.CallEvents.IgnoreQueryFilters().AsNoTracking().AnyAsync(x =>
                 x.TenantId == source.TenantId && x.CallSessionId == source.CallSessionId && !x.IsDeleted
                 && x.EventType == "LocalAiTurnProcessed" && x.PayloadJson != null
-                && x.PayloadJson.Contains(marker), ct);
+                && (x.PayloadJson.Contains(marker) || x.PayloadJson.Contains(legacyMarker)), ct);
             if (done || !_inflight.TryAdd(source.Id, 0)) continue;
             tasks.Add(ProcessGuardedAsync(source.Id, source.CallSessionId, ct));
         }
         if (tasks.Count > 0) await Task.WhenAll(tasks);
+        pollTiming.Complete();
     }
+
+    private int _activeTurns;
 
     private async Task ProcessGuardedAsync(Guid sourceEventId, Guid callId, CancellationToken ct)
     {
-        await VoiceTiming.Run(_logger, callId, sourceEventId, "worker_queue", () => _capacity.WaitAsync(ct));
+        var acquired = false;
         try
         {
+            await VoiceTiming.Run(_logger, callId, sourceEventId, "queue_wait", () => _capacity.WaitAsync(ct));
+            acquired = true;
+            Interlocked.Increment(ref _activeTurns);
+            using var turnTiming = new VoiceTiming(_logger, callId, sourceEventId, "turn_processing_total", Volatile.Read(ref _activeTurns));
             await ProcessTurnAsync(sourceEventId, ct);
+            turnTiming.Complete();
             _failures.TryRemove(sourceEventId, out _);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -109,7 +119,7 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
         }
         finally
         {
-            _capacity.Release();
+            if (acquired) { Interlocked.Decrement(ref _activeTurns); _capacity.Release(); }
             _inflight.TryRemove(sourceEventId, out _);
         }
     }
@@ -198,6 +208,13 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             decision = decision with { Reply = transcript.Language.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
                 ? "দুঃখিত, অনুগ্রহ করে কথাটি আবার বলুন।" : "Sorry, please say that again." };
 
+        var route = explicitHandoff ? "handoff" : appointment is not null ? "appointment" : "general";
+        // Free-form model output must not decide when a live call is terminated.
+        if (decision.EndCall && appointment is null && !GoodbyeRegex().IsMatch(transcript.Text))
+            decision = decision with { EndCall = false };
+        _logger.LogInformation("VOICE_DECISION {Decision}", JsonSerializer.Serialize(new {
+            call_id = session.Id, turn_id = recordingId, route, language = transcript.Language,
+            end_call = decision.EndCall, handoff_requested = decision.HandoffRequested }));
         decisionTiming.Complete();
         decisionTiming.Dispose();
         conversation.DetectedLanguage = transcript.Language;

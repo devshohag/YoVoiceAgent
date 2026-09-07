@@ -14,7 +14,9 @@ def summarize(lines):
             continue
         try:
             r = json.loads(line.split('VOICE_TIMING ', 1)[1])
-            records.append({k: r.get(k) for k in ('call_id', 'turn_id', 'stage', 'started_at', 'ended_at', 'duration_ms', 'concurrency', 'outcome')})
+            records.append({k: r.get(k) for k in ('call_id', 'turn_id', 'stage', 'started_at', 'ended_at', 'duration_ms', 'concurrency', 'outcome', 'audio_duration_ms', 'vad_audio_duration_ms', 'beam_size', 'cpu_threads', 'model', 'compute_type')})
+            if r.get('audio_duration_ms', 0) and r.get('duration_ms') is not None:
+                records[-1]['inference_rtf'] = r['duration_ms'] / r['audio_duration_ms']
             key = (r['stage'], r.get('outcome', 'unknown'))
             if r.get('duration_ms') is not None:
                 groups[key].append(float(r['duration_ms']))
@@ -31,4 +33,11 @@ def summarize(lines):
             'note': 'Stages overlap/nest: DO NOT SUM. ARI ack is not caller-heard playback. Missing completion may be running, crashed or outside log window.'}
 
 if __name__ == '__main__':
-    print(json.dumps(summarize(sys.stdin), indent=2))
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--details', action='store_true', help='Include individual timing records')
+    args = parser.parse_args()
+    result = summarize(sys.stdin)
+    if not args.details:
+        result.pop('records', None)
+    print(json.dumps(result, indent=2))

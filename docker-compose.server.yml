@@ -101,6 +101,8 @@ services:
     environment:
       WHISPER_MODEL: "${WHISPER_MODEL:-base}"
       WHISPER_DEVICE: cpu
+      WHISPER_BEAM_SIZE: "${WHISPER_BEAM_SIZE:-3}"
+      WHISPER_CPU_THREADS: "${WHISPER_CPU_THREADS:-4}"
       WHISPER_COMPUTE_TYPE: "${WHISPER_COMPUTE_TYPE:-int8}"
       SPEECH_NUM_PARALLEL: "${LOCAL_AI_SPEECH_PARALLEL:-1}"
     volumes: [local-ai-models:/models]

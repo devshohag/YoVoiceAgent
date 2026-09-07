@@ -19,7 +19,7 @@ def stage(name):
     print('VOICE_TIMING ' + json.dumps(base), flush=True)
     outcome = 'error'
     try:
-        yield
+        yield base
         outcome = 'success'
     finally:
         base.update(ended_at=utc(), duration_ms=(time.perf_counter()-tick)*1000, outcome=outcome)

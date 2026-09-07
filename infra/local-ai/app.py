@@ -20,6 +20,8 @@ app = FastAPI(title="CCaaS Local Speech", version="1.0")
 model_name = os.getenv("WHISPER_MODEL", "small")
 device = os.getenv("WHISPER_DEVICE", "cpu")
 compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+beam_size = max(1, int(os.getenv("WHISPER_BEAM_SIZE", "3")))
+cpu_threads = max(1, int(os.getenv("WHISPER_CPU_THREADS", "4")))
 parallelism = max(1, int(os.getenv("SPEECH_NUM_PARALLEL", "2")))
 speech_slots = asyncio.Semaphore(parallelism)
 active_speech_requests = 0
@@ -28,7 +30,7 @@ active_speech_requests = 0
 @lru_cache(maxsize=1)
 def whisper_model() -> WhisperModel:
     return WhisperModel(model_name, device=device, compute_type=compute_type,
-                        download_root="/models/whisper")
+                        download_root="/models/whisper", cpu_threads=cpu_threads)
 
 
 VOICE_FILES = {
@@ -68,7 +70,8 @@ async def timing_context(request: Request, call_next):
 @app.get("/health")
 async def health():
     return {"status": "healthy", "whisperModel": model_name,
-            "device": device, "parallelism": parallelism}
+            "device": device, "parallelism": parallelism,
+            "beamSize": beam_size, "cpuThreads": cpu_threads, "computeType": compute_type}
 
 
 @app.post("/v1/audio/transcriptions")
@@ -84,15 +87,19 @@ async def transcribe(file: UploadFile = File(...), language: str = Form("auto"))
             def run():
                 with stage("stt_model_load"):
                     model = whisper_model()
-                with stage("stt_inference_batch"):
+                with stage("stt_inference_batch") as timing:
                     segments, info = model.transcribe(
                         source_path,
                         language=None if language in ("", "auto") else language,
                         vad_filter=True,
-                        beam_size=3,
+                        beam_size=beam_size,
                         condition_on_previous_text=False,
                     )
                     text = " ".join(segment.text.strip() for segment in segments).strip()
+                    timing.update(audio_duration_ms=info.duration * 1000,
+                                  vad_audio_duration_ms=info.duration_after_vad * 1000,
+                                  beam_size=beam_size, cpu_threads=cpu_threads,
+                                  model=model_name, compute_type=compute_type)
                 return text, info.language, info.language_probability
 
             text, detected, confidence = await asyncio.to_thread(run)

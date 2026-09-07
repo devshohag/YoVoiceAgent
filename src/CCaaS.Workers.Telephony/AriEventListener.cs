@@ -429,6 +429,8 @@ public sealed class AriEventListener : BackgroundService
         if (!_callsByChannel.TryRemove(channelId, out context)) return;
         _callsByRecording.TryRemove(context.RecordingName, out _);
         var cause = ReadString(root, "cause_txt") ?? ReadString(root, "cause") ?? type;
+        _logger.LogInformation("VOICE_HANGUP {Hangup}", JsonSerializer.Serialize(new {
+            call_id = context.CallSessionId, event_type = type, cause, at = DateTime.UtcNow }));
         using var scope = _scopeFactory.CreateScope();
         var calls = scope.ServiceProvider.GetRequiredService<ICallService>();
         if (_recordingTimers.TryRemove(context.RecordingName, out var unfinished)) unfinished.Dispose();

@@ -77,4 +77,15 @@ class RequestTests(unittest.TestCase):
         self.assertGreaterEqual(rows[1]['duration_ms'], 0)
         self.assertNotIn('private transcript', output.getvalue())
 
+class ReportTests(unittest.TestCase):
+    def test_rtf_uses_same_record_duration(self):
+        spec = importlib.util.spec_from_file_location('report', Path(__file__).with_name('report.py'))
+        report = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(report)
+        result = report.summarize(['VOICE_TIMING ' + json.dumps(dict(call_id='c', turn_id='t',
+            stage='stt_inference_batch', outcome='success', duration_ms=900,
+            audio_duration_ms=3000, vad_audio_duration_ms=2000))])
+        self.assertAlmostEqual(result['records'][0]['inference_rtf'], .3)
+        self.assertEqual(result['records'][0]['vad_audio_duration_ms'], 2000)
+
 if __name__ == '__main__': unittest.main()
