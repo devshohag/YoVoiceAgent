@@ -28,4 +28,5 @@
     <ProjectReference Include="..\..\src\CCaaS.Infrastructure\CCaaS.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup><Compile Include="../../tools/CCaaS.VoiceSimulator/MemoryAppointments.cs" Link="MemoryAppointments.cs" /></ItemGroup>
 </Project>

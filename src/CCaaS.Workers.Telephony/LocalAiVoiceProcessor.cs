@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using CCaaS.Application.Ai;
 using CCaaS.Application.Appointment;
+using CCaaS.Application.Appointment.Voice;
 using CCaaS.Application.Calls;
 using CCaaS.Domain.Ai;
 using CCaaS.Domain.Organization;
@@ -21,6 +22,7 @@ namespace CCaaS.Workers.Telephony;
 public sealed partial class LocalAiVoiceProcessor : BackgroundService
 {
     private const string Bucket = "call-recordings";
+    private const string AppointmentV2Prefix = "[APPOINTMENT_V2]";
     private const string AppointmentStatePrefix = "[APPOINTMENT_STATE]";
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHttpClientFactory _clients;
@@ -185,7 +187,8 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
 
         var priorTurns = await db.AiConversationTurns.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.TenantId == source.TenantId && x.AiConversationId == conversation.Id && !x.IsDeleted)
-            .OrderBy(x => x.Sequence).Take(80).ToListAsync(ct);
+            .OrderByDescending(x => x.Sequence).Take(80).ToListAsync(ct);
+        priorTurns.Reverse();
         var sequence = priorTurns.Count == 0 ? 1 : priorTurns.Max(x => x.Sequence) + 1;
         db.AiConversationTurns.Add(new AiConversationTurn { TenantId = source.TenantId,
             AiConversationId = conversation.Id, Speaker = AiSpeaker.Customer,
@@ -194,7 +197,20 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
         VoiceTiming.Current.Value = (session.Id.ToString(), recordingId.ToString()!);
         using var decisionTiming = new VoiceTiming(_logger, session.Id, recordingId, "decision");
         var explicitHandoff = HumanRequestRegex().IsMatch(transcript.Text);
-        var appointment = explicitHandoff ? null : await TryHandleAppointmentAsync(
+        var useV2 = _configuration.GetValue("AiVoice:AppointmentWorkflowV2", false);
+        AppointmentConversationReply? v2 = null;
+        if (useV2 && !explicitHandoff)
+        {
+            var stored = priorTurns.LastOrDefault(t => t.Speaker == AiSpeaker.System && t.Text.StartsWith(AppointmentV2Prefix))?.Text;
+            var state = stored is null ? null : JsonSerializer.Deserialize<AppointmentConversationState>(stored[AppointmentV2Prefix.Length..]);
+            // Isolate appointment transactions from pending conversation entities.
+            // A rolled-back booking must never be saved later by the worker context.
+            await using var appointmentScope = _scopeFactory.CreateAsyncScope();
+            v2 = await new AppointmentConversation(appointmentScope.ServiceProvider.GetRequiredService<IAppointmentService>())
+                .StepAsync(source.TenantId, session.Id, state, recordingId.ToString()!, transcript.Text,
+                    DateTimeOffset.UtcNow, ResolveAppointmentTimeZone(), agent.Language.StartsWith("bn"), ct);
+        }
+        var appointment = explicitHandoff || useV2 ? null : await TryHandleAppointmentAsync(
             scope.ServiceProvider.GetRequiredService<IAppointmentService>(), source.TenantId,
             priorTurns, transcript.Text, transcript.Language, ct);
         var decision = explicitHandoff
@@ -202,18 +218,18 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
                 ? "অনুগ্রহ করে অপেক্ষা করুন, আমি আপনাকে একজন মানব সহায়তা প্রতিনিধির সাথে সংযুক্ত করছি।"
                 : "Please hold while I connect you to a human support agent.", false, true,
                 "Caller explicitly requested a human agent.")
-            : appointment?.Decision ?? TryFastCommonReply(transcript.Text, transcript.Language)
+            : (v2 is null ? null : new VoiceDecision(v2.Text, false, false, null)) ?? appointment?.Decision ?? TryFastCommonReply(transcript.Text, transcript.Language)
                 ?? await GenerateReplyAsync(llm, agent, priorTurns, transcript.Text, transcript.Language, ct);
         if (string.IsNullOrWhiteSpace(decision.Reply))
             decision = decision with { Reply = transcript.Language.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
                 ? "দুঃখিত, অনুগ্রহ করে কথাটি আবার বলুন।" : "Sorry, please say that again." };
 
-        var route = explicitHandoff ? "handoff" : appointment is not null ? "appointment" : "general";
+        var route = explicitHandoff ? "handoff" : v2 is not null ? "appointment-v2" : appointment is not null ? "appointment" : "general";
         // Free-form model output must not decide when a live call is terminated.
         if (decision.EndCall && appointment is null && !GoodbyeRegex().IsMatch(transcript.Text))
             decision = decision with { EndCall = false };
         _logger.LogInformation("VOICE_DECISION {Decision}", JsonSerializer.Serialize(new {
-            call_id = session.Id, turn_id = recordingId, route, language = transcript.Language,
+            call_id = session.Id, turn_id = recordingId, route, workflow_action = v2?.Action, language = transcript.Language,
             end_call = decision.EndCall, handoff_requested = decision.HandoffRequested }));
         decisionTiming.Complete();
         decisionTiming.Dispose();
@@ -231,6 +247,14 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             conversation.Outcome = "Human agent unavailable";
         }
 
+        if (v2 is not null)
+        {
+            sequence++;
+            db.AiConversationTurns.Add(new AiConversationTurn { TenantId = source.TenantId,
+                AiConversationId = conversation.Id, Speaker = AiSpeaker.System,
+                Text = AppointmentV2Prefix + JsonSerializer.Serialize(v2.State), Sequence = sequence });
+            conversation.Intent = "Appointment";
+        }
         if (appointment is not null)
         {
             sequence++;

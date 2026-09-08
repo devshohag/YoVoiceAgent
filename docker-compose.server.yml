@@ -157,6 +157,7 @@ services:
       AiVoice__MaxConcurrentCalls: "${AI_VOICE_MAX_CONCURRENT_CALLS:-1}"
       AiVoice__Model: "${OLLAMA_MODEL:-qwen3:1.7b}"
       AiVoice__ProviderTimeoutSeconds: "${AI_VOICE_PROVIDER_TIMEOUT_SECONDS:-120}"
+      AiVoice__AppointmentWorkflowV2: "${AI_VOICE_APPOINTMENT_WORKFLOW_V2:-false}"
       AiVoice__AppointmentTimeZoneId: "${APPOINTMENT_TIME_ZONE_ID:-Asia/Dhaka}"
       Telephony__RecordingMaxDurationSeconds: "${TELEPHONY_RECORDING_MAX_DURATION_SECONDS:-15}"
       Telephony__RecordingMaxSilenceSeconds: "${TELEPHONY_RECORDING_MAX_SILENCE_SECONDS:-2}"

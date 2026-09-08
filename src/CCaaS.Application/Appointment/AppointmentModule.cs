@@ -9,10 +9,15 @@ public record AppointmentVoucherData(Guid BookingId, string BookingReference, st
     string CustomerContact, string? Purpose, string ProviderName, DateTime StartsAtUtc,
     DateTime EndsAtUtc, string Status, DateTime ConfirmedAtUtc);
 
+public record VoiceBookingIdentity(Guid BookingId, string CustomerName, string BookingReference);
+
 public interface IAppointmentService
 {
     Task<IReadOnlyList<AvailableAppointmentSlot>> GetAvailabilityAsync(Guid tenantId, DateOnly date, CancellationToken ct = default);
     Task<AppointmentBookingResult> BookAsync(Guid tenantId, BookAppointmentCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<AppointmentBooking>> GetBookingsAsync(Guid tenantId, CancellationToken ct = default);
+    Task<VoiceBookingIdentity?> FindForVoiceAsync(Guid tenantId, string reference, string contact, CancellationToken ct = default);
+    Task CancelForVoiceAsync(Guid tenantId, Guid bookingId, string contact, CancellationToken ct = default);
+    Task<AppointmentBookingResult> RescheduleForVoiceAsync(Guid tenantId, Guid bookingId, string contact, Guid targetSlotId, CancellationToken ct = default);
     Task<AppointmentVoucherData?> GetVoucherAsync(Guid tenantId, Guid bookingId, CancellationToken ct = default);
 }

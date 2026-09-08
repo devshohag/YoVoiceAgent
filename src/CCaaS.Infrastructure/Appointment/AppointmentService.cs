@@ -53,10 +53,12 @@ internal sealed class AppointmentService : IAppointmentService
         var existing = await _db.AppointmentBookings.IgnoreQueryFilters()
             .SingleOrDefaultAsync(x => x.TenantId == tenantId
                                        && !x.IsDeleted
+                                       && x.Status == AppointmentBookingStatus.Confirmed
                                        && x.AvailabilitySlotId == command.SlotId, ct);
         if (existing is not null)
         {
-            if (!string.Equals(existing.CustomerContact, normalizedContact, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(existing.CustomerContact, normalizedContact, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(existing.CustomerName, command.CustomerName.Trim(), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("That appointment slot has already been booked.");
 
             var existingSlot = await FindTenantSlotAsync(tenantId, command.SlotId, ct)
@@ -69,7 +71,7 @@ internal sealed class AppointmentService : IAppointmentService
 
         var slot = await FindTenantSlotAsync(tenantId, command.SlotId, ct)
             ?? throw new KeyNotFoundException("Appointment slot was not found.");
-        if (slot.Status != AppointmentSlotStatus.Available)
+        if (slot.Status != AppointmentSlotStatus.Available || slot.StartsAtUtc <= DateTime.UtcNow)
             throw new InvalidOperationException("That appointment slot is no longer available.");
 
         var providerExists = await _db.AppointmentProviders.IgnoreQueryFilters()
@@ -142,6 +144,73 @@ internal sealed class AppointmentService : IAppointmentService
                 booking.ConfirmedAtUtc))
             .AsNoTracking()
             .SingleOrDefaultAsync(ct);
+    }
+
+    public async Task<VoiceBookingIdentity?> FindForVoiceAsync(Guid tenantId, string reference, string contact, CancellationToken ct = default)
+    {
+        EnsureTenant(tenantId);
+        var normalized = NormalizeContact(contact);
+        return await _db.AppointmentBookings.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.TenantId == tenantId && !x.IsDeleted && x.BookingReference == reference
+                && x.CustomerContact == normalized)
+            .Select(x => new VoiceBookingIdentity(x.Id, x.CustomerName, x.BookingReference)).SingleOrDefaultAsync(ct);
+    }
+
+    public async Task CancelForVoiceAsync(Guid tenantId, Guid bookingId, string contact, CancellationToken ct = default)
+    {
+        EnsureTenant(tenantId);
+        var normalized = NormalizeContact(contact);
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var booking = await _db.AppointmentBookings.IgnoreQueryFilters().SingleOrDefaultAsync(x =>
+            x.Id == bookingId && x.TenantId == tenantId && !x.IsDeleted && x.CustomerContact == normalized, ct)
+            ?? throw new InvalidOperationException("Booking does not match.");
+        if (booking.Status == AppointmentBookingStatus.Cancelled) { await transaction.CommitAsync(ct); return; }
+        if (booking.Status != AppointmentBookingStatus.Confirmed) throw new InvalidOperationException("Booking cannot be cancelled.");
+        var slot = await FindTenantSlotAsync(tenantId, booking.AvailabilitySlotId, ct)
+            ?? throw new InvalidOperationException("Slot not found.");
+        if (slot.StartsAtUtc <= DateTime.UtcNow) throw new InvalidOperationException("Past appointment cannot be cancelled.");
+        booking.Status = AppointmentBookingStatus.Cancelled;
+        booking.UpdatedAt = DateTime.UtcNow;
+        slot.Status = AppointmentSlotStatus.Available;
+        slot.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+    }
+
+    public async Task<AppointmentBookingResult> RescheduleForVoiceAsync(Guid tenantId, Guid bookingId,
+        string contact, Guid targetSlotId, CancellationToken ct = default)
+    {
+        EnsureTenant(tenantId);
+        var normalized = NormalizeContact(contact);
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var booking = await _db.AppointmentBookings.IgnoreQueryFilters().SingleOrDefaultAsync(x =>
+            x.Id == bookingId && x.TenantId == tenantId && !x.IsDeleted && x.CustomerContact == normalized, ct)
+            ?? throw new InvalidOperationException("Booking does not match.");
+        if (booking.Status != AppointmentBookingStatus.Confirmed) throw new InvalidOperationException("Booking cannot be rescheduled.");
+        var target = await FindTenantSlotAsync(tenantId, targetSlotId, ct)
+            ?? throw new InvalidOperationException("Target slot not found.");
+        if (booking.AvailabilitySlotId == targetSlotId)
+        {
+            await transaction.CommitAsync(ct);
+            return new(booking.Id, booking.BookingReference, target.StartsAtUtc, booking.Status.ToString(), true);
+        }
+        if (target.Status != AppointmentSlotStatus.Available || target.StartsAtUtc <= DateTime.UtcNow)
+            throw new InvalidOperationException("Target slot unavailable.");
+        if (!await _db.AppointmentProviders.IgnoreQueryFilters().AnyAsync(x => x.Id == target.AppointmentProviderId
+            && x.TenantId == tenantId && !x.IsDeleted && x.IsActive, ct)) throw new InvalidOperationException("Provider unavailable.");
+        var previous = await FindTenantSlotAsync(tenantId, booking.AvailabilitySlotId, ct)
+            ?? throw new InvalidOperationException("Previous slot not found.");
+        if (previous.StartsAtUtc <= DateTime.UtcNow) throw new InvalidOperationException("Past booking cannot be rescheduled.");
+        previous.Status = AppointmentSlotStatus.Available;
+        previous.UpdatedAt = DateTime.UtcNow;
+        target.Status = AppointmentSlotStatus.Booked;
+        target.UpdatedAt = DateTime.UtcNow;
+        booking.AvailabilitySlotId = target.Id;
+        booking.AppointmentProviderId = target.AppointmentProviderId;
+        booking.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new(booking.Id, booking.BookingReference, target.StartsAtUtc, booking.Status.ToString(), false);
     }
 
     private Task<AppointmentAvailabilitySlot?> FindTenantSlotAsync(

@@ -188,7 +188,8 @@ public class CcaasDbContext : DbContext
         modelBuilder.Entity<AppointmentAvailabilitySlot>()
             .HasIndex(x => new { x.TenantId, x.AppointmentProviderId, x.StartsAtUtc }).IsUnique();
         modelBuilder.Entity<AppointmentBooking>()
-            .HasIndex(x => new { x.TenantId, x.AvailabilitySlotId }).IsUnique();
+            .HasIndex(x => new { x.TenantId, x.AvailabilitySlotId }).IsUnique()
+            .HasFilter("[Status] = 0 AND [IsDeleted] = 0");
         modelBuilder.Entity<AppointmentBooking>()
             .HasIndex(x => new { x.TenantId, x.BookingReference }).IsUnique();
 

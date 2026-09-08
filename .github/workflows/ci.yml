@@ -22,6 +22,7 @@ jobs:
           cache-dependency-path: "**/*.csproj"
       - run: dotnet restore CCaaS.sln
       - run: dotnet build CCaaS.sln -c Release --no-restore --warnaserror
+      - run: dotnet build tools/CCaaS.VoiceSimulator/CCaaS.VoiceSimulator.csproj -c Release --warnaserror
       - run: dotnet test CCaaS.sln -c Release --no-build --logger "trx;LogFileName=tests.trx" --collect:"XPlat Code Coverage"
       - uses: actions/upload-artifact@v4
         if: always()
