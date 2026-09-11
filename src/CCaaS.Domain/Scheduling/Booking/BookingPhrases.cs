@@ -15,6 +15,7 @@ public interface IBookingPhrases
 {
     string AskWhen();
     string AskWhichDay();
+    string AskUnambiguousDate() => AskWhichDay();
     string AskWhatTime(DateOnly date, DateOnly today);
     string AskMorningOrEvening(int hour12);
     string ThatTimeHasPassed();
@@ -53,6 +54,9 @@ public sealed class EnglishBookingPhrases : IBookingPhrases
 
     public string AskWhichDay() =>
         "Which day would you like to come in?";
+
+    public string AskUnambiguousDate() =>
+        "Please say the date with the month name, so I book the right day.";
 
     public string AskWhatTime(DateOnly date, DateOnly today) =>
         $"What time {SpeakDateWithPreposition(date, today)}?";

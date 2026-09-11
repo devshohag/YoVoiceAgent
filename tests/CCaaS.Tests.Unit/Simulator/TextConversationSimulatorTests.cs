@@ -36,9 +36,13 @@ public sealed class TextConversationSimulatorTests
         var scenario = TextConversationSimulator.Load(Path.Combine(ScenarioDirectory, file));
         var frames = new TextConversationSimulator().Run(scenario);
 
-        var openingLines = scenario.Welcome is null ? 1 : 2;
+        var openingLines = string.IsNullOrWhiteSpace(scenario.Welcome) ? 1 : 2;
         Assert.Equal(BookingStage.CollectingWhen, frames[0].State.Stage);
         Assert.Equal(Enumerable.Repeat("Speak", openingLines).ToArray(), frames[0].Actions);
+
+        if (!string.IsNullOrWhiteSpace(scenario.Welcome))
+            Assert.Equal(scenario.Welcome.Trim(), frames[0].SpokenLines[0]);
+        Assert.Equal(EnglishBookingPhrases.Instance.AskWhen(), frames[0].SpokenLines[^1]);
 
         for (var i = 0; i < scenario.Steps.Count; i++)
         {
@@ -81,7 +85,7 @@ public sealed class TextConversationSimulatorTests
     /// fixture. A fixture only catches what its author thought to assert; these catch what a
     /// future change would break without anyone noticing, and they cost nothing to carry.
     /// </summary>
-    private static void AssertInvariants(
+    internal static void AssertInvariants(
         ConversationScenario scenario, IReadOnlyList<SimulationFrame> frames)
     {
         var phrases = EnglishBookingPhrases.Instance;
@@ -102,7 +106,7 @@ public sealed class TextConversationSimulatorTests
                 if (frame.State.BookingReference is null)
                 {
                     foreach (var claim in TextConversationSimulator.BookingClaims)
-                        Assert.DoesNotContain(claim, line, StringComparison.OrdinalIgnoreCase);
+                        Assert.DoesNotContain(claim, line.Replace("’", "'"), StringComparison.OrdinalIgnoreCase);
 
                     foreach (var spoken in spokenReferences)
                         Assert.DoesNotContain(spoken, line, StringComparison.OrdinalIgnoreCase);
@@ -125,6 +129,8 @@ public sealed class TextConversationSimulatorTests
                 var readback = frame.SpokenLines[^1];
                 var name = frame.State.CallerName ?? frame.State.Contact;
 
+                Assert.Contains(phrases.SpeakDate(DateOnly.FromDateTime(slot.StartsAtLocal),
+                    DateOnly.FromDateTime(scenario.NowLocal)), readback, StringComparison.OrdinalIgnoreCase);
                 Assert.Contains(phrases.SpeakTime(TimeOnly.FromDateTime(slot.StartsAtLocal)),
                     readback, StringComparison.OrdinalIgnoreCase);
                 Assert.Contains(name, readback, StringComparison.OrdinalIgnoreCase);

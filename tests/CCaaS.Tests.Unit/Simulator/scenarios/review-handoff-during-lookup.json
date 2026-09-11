@@ -1,0 +1,39 @@
+{
+  "name": "review-handoff-during-lookup",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:16:00:None"
+      ],
+      "expect": {
+        "date": "2026-09-17",
+        "time": "16:00",
+        "waiting": true
+      },
+      "text": "tomorrow at four",
+      "says": [
+        "Let me check that for you."
+      ]
+    },
+    {
+      "kind": "say",
+      "text": "can I talk to a real person please",
+      "stage": "Transferring",
+      "actions": [
+        "Speak:closing",
+        "Transfer:CallerAsked"
+      ],
+      "says": [
+        "Of course - let me put you through to a colleague."
+      ],
+      "expect": {
+        "handoff": "CallerAsked"
+      }
+    }
+  ]
+}

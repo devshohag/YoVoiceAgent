@@ -200,6 +200,19 @@ public class CcaasDbContext : DbContext
         modelBuilder.Entity<AppointmentBooking>()
             .HasIndex(x => new { x.TenantId, x.BookingReference }).IsUnique();
 
+        // Task 2.5 keeps the original tenant/slot unique index: exactly one seat.
+        modelBuilder.Entity<AppointmentAvailabilitySlot>()
+            .Property(x => x.RowVersion).IsRowVersion();
+        modelBuilder.Entity<AppointmentAvailabilitySlot>().ToTable("AppointmentAvailabilitySlot", "appointment", table =>
+        {
+            table.HasCheckConstraint("CK_AppointmentSlot_Capacity", "[Capacity] = 1");
+            table.HasCheckConstraint("CK_AppointmentSlot_BookedCount", "[BookedCount] >= 0 AND [BookedCount] <= [Capacity]");
+        });
+        modelBuilder.Entity<AppointmentBooking>()
+            .Property(x => x.IdempotencyKey).HasMaxLength(64).IsRequired();
+        modelBuilder.Entity<AppointmentBooking>()
+            .HasIndex(x => new { x.TenantId, x.IdempotencyKey }).IsUnique();
+
         ConfigurePhoneLookupIndexes(modelBuilder);
         ConfigureComplianceIndexes(modelBuilder);
         ConfigureDialerIndexes(modelBuilder);
