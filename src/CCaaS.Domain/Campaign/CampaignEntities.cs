@@ -49,6 +49,50 @@ public class CampaignLead : BaseEntity
     public int Attempts { get; set; }
     public DateTime? NextAttemptAt { get; set; }
     public string? LastOutcome { get; set; }
+
+    // ---- Dialer additions --------------------------------------------------------------
+
+    /// <summary>
+    /// Where this contact stands in the campaign. The dialer's hot query is
+    /// "next N rows for this campaign where State = Pending and NextAttemptAt is due", which
+    /// is why State is an indexed column rather than something derived from Attempts.
+    /// </summary>
+    public CampaignLeadState State { get; set; } = CampaignLeadState.Pending;
+
+    /// <summary>
+    /// Terminal outcome once the contact is finished with, e.g. "booked", "refused",
+    /// "wrong-number". <see cref="LastOutcome"/> records the most recent attempt;
+    /// this records how the contact ended.
+    /// </summary>
+    public string? FinalDisposition { get; set; }
+
+    /// <summary>Most recent call placed for this contact, for jumping straight to the recording.</summary>
+    public Guid? LastCallSessionId { get; set; }
+
+    /// <summary>
+    /// When this row stopped being dialable. Set together with
+    /// <see cref="CampaignLeadState.Suppressed"/>; the reason itself lives in the
+    /// SuppressionCheck audit trail, which is the record a dispute actually needs.
+    /// </summary>
+    public DateTime? SuppressedAtUtc { get; set; }
+}
+
+public enum CampaignLeadState
+{
+    /// <summary>Waiting to be dialled, subject to NextAttemptAt.</summary>
+    Pending,
+
+    /// <summary>A call is in flight. Prevents two dialer workers picking the same contact.</summary>
+    InProgress,
+
+    /// <summary>Reached a terminal outcome - booked, refused, resolved.</summary>
+    Completed,
+
+    /// <summary>Ran out of permitted attempts without a terminal outcome.</summary>
+    Exhausted,
+
+    /// <summary>Blocked by the compliance gate - do-not-call, no consent, or not allow-listed.</summary>
+    Suppressed
 }
 
 public class CampaignAgent : BaseEntity
