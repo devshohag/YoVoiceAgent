@@ -275,17 +275,24 @@ END");
 
     private sealed class BaselineContext : CcaasDbContext
     {
-        public BaselineContext(DbContextOptions<CcaasDbContext> options) : base(options) { }
+        public BaselineContext(DbContextOptions<CcaasDbContext> options)
+            : base(options) { }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
-            builder.Entity<AppointmentAvailabilitySlot>().ToTable("AppointmentAvailabilitySlot", "appointment", table =>
-            {
-                table.HasCheckConstraint("CK_AppointmentSlot_Capacity", null);
-                table.HasCheckConstraint("CK_AppointmentSlot_BookedCount", null);
-            });
-            builder.Entity<AppointmentAvailabilitySlot>().Ignore(x => x.Capacity).Ignore(x => x.BookedCount).Ignore(x => x.RowVersion);
-            builder.Entity<AppointmentBooking>().Ignore(x => x.IdempotencyKey);
+
+            var slot = builder.Entity<AppointmentAvailabilitySlot>();
+
+            slot.Metadata.RemoveCheckConstraint("CK_AppointmentSlot_Capacity");
+            slot.Metadata.RemoveCheckConstraint("CK_AppointmentSlot_BookedCount");
+
+            slot.Ignore(x => x.Capacity)
+                .Ignore(x => x.BookedCount)
+                .Ignore(x => x.RowVersion);
+
+            builder.Entity<AppointmentBooking>()
+                .Ignore(x => x.IdempotencyKey);
         }
     }
 }
