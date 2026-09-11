@@ -152,6 +152,9 @@ public sealed record BookingState
     public string? BookingReference { get; init; }
     public HandoffReason HandoffReason { get; init; } = HandoffReason.None;
 
+    /// <summary>A human was requested while a commit was already in flight; preserve its outcome first.</summary>
+    public bool HandoffPending { get; init; }
+
     // ---- guard rails
     public int NoProgressTurns { get; init; }
     public int CallerTurns { get; init; }

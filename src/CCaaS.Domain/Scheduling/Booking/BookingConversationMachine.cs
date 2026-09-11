@@ -86,15 +86,20 @@ public sealed class BookingConversationMachine
     {
         // While a database round trip is in flight the caller may still be talking. Those words
         // are not an answer to anything, and counting them as failure would end healthy calls.
+        var move = CallerIntent.Detect(utterance);
         if (state.IsWaitingOnSystem)
+        {
+            if (move == CallerMove.WantsHuman)
+                return state.Stage == BookingStage.Booking
+                    ? new BookingTurn(state with { HandoffPending = true }, Array.Empty<BookingAction>())
+                    : Transfer(state, HandoffReason.CallerAsked);
             return new BookingTurn(state, Array.Empty<BookingAction>());
+        }
 
         state = state with { CallerTurns = state.CallerTurns + 1 };
 
-        var move = CallerIntent.Detect(utterance);
-
-        // A request for a person is honoured from any stage, immediately, before anything else
-        // is considered. Nothing a caller can say outranks it.
+        // Caller-facing stages transfer immediately. The waiting branch above preserves
+        // a commit already in flight before fulfilling a pending transfer request.
         if (move == CallerMove.WantsHuman)
             return Transfer(state, HandoffReason.CallerAsked);
 
@@ -124,6 +129,7 @@ public sealed class BookingConversationMachine
             return NoProgress(state, context, _say.DidNotCatchThat());
 
         var next = Merge(state, parsed);
+        if (parsed.DateCertainty == ValueCertainty.Ambiguous) return AskForClearDate(next);
 
         // A time already gone is a mistake worth naming. The parser reports it rather than
         // correcting it precisely so this line can exist.
@@ -160,6 +166,7 @@ public sealed class BookingConversationMachine
     /// </summary>
     private BookingTurn AfterWhen(BookingState state, DateTimeParseContext context)
     {
+        if (state.DateCertainty == ValueCertainty.Ambiguous) return AskForClearDate(state);
         if (state.Date is null)
             return Progress(state with { Stage = BookingStage.CollectingWhen },
                 new BookingAction.Speak(_say.AskWhichDay()));
@@ -208,6 +215,7 @@ public sealed class BookingConversationMachine
         BookingState state, string utterance, CallerMove move, DateTimeParseContext context)
     {
         var parsed = _parser.Parse(utterance, context);
+        if (parsed.DateCertainty == ValueCertainty.Ambiguous) return AskForClearDate(Merge(state, parsed));
 
         // A time that matches something on the table is a choice, however it was phrased.
         if (parsed.HasTime)
@@ -264,6 +272,7 @@ public sealed class BookingConversationMachine
         // A correction takes priority over the yes/no reading: "no, make it four" is both a
         // refusal and a new request, and only the second half is useful.
         var parsed = _parser.Parse(utterance, context);
+        if (parsed.DateCertainty == ValueCertainty.Ambiguous) return AskForClearDate(Merge(state, parsed));
         if (parsed.HasAnything && !parsed.IsInPast)
             return AfterWhen(
                 Merge(state with { Selected = null, Offered = Array.Empty<OfferedSlot>() }, parsed),
@@ -368,6 +377,9 @@ public sealed class BookingConversationMachine
             NoProgressTurns = 0
         };
 
+        if (state.HandoffPending)
+            return Transfer(booked with { HandoffPending = false }, HandoffReason.CallerAsked);
+
         return new BookingTurn(booked, new BookingAction[]
         {
             new BookingAction.Speak(_say.Confirmed(state.Selected!, reference, Today(context)), ExpectsReply: false),
@@ -377,6 +389,9 @@ public sealed class BookingConversationMachine
 
     private BookingTurn OnRejected(BookingState state, BookingFailure failure, DateTimeParseContext context)
     {
+        if (state.HandoffPending)
+            return Transfer(state with { HandoffPending = false }, HandoffReason.CallerAsked);
+
         // Losing a race for a slot is ordinary under concurrency and entirely recoverable:
         // apologise, look again, carry on. It is not a reason to lose the call.
         if (failure == BookingFailure.SlotTaken && state.Date is not null)
@@ -428,6 +443,14 @@ public sealed class BookingConversationMachine
     }
 
     /// <summary>The conversation moved forward, so the patience counter resets.</summary>
+    private BookingTurn AskForClearDate(BookingState state) =>
+        Progress(state with
+        {
+            Stage = BookingStage.CollectingWhen, Date = null,
+            DateCertainty = ValueCertainty.NotProvided,
+            Selected = null, Offered = Array.Empty<OfferedSlot>()
+        }, new BookingAction.Speak(_say.AskUnambiguousDate()));
+
     private static BookingTurn Progress(BookingState state, params BookingAction[] actions) =>
         new(state with { NoProgressTurns = 0 }, actions);
 

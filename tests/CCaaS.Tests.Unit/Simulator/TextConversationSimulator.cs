@@ -159,6 +159,7 @@ public sealed class TextConversationSimulator
         ["contact"] = state.Contact,
         ["reference"] = state.BookingReference,
         ["handoff"] = state.HandoffReason.ToString(),
+        ["handoffPending"] = state.HandoffPending,
         ["noProgress"] = state.NoProgressTurns,
         ["callerTurns"] = state.CallerTurns,
         ["emptyLookups"] = state.EmptyLookups,
@@ -175,6 +176,9 @@ public sealed class TextConversationSimulator
     public static readonly string[] BookingClaims =
     {
         "you're booked", "youre booked", "you are booked",
-        "that's booked", "thats booked", "is booked", "i've booked", "ive booked"
+        "that's booked", "thats booked", "is booked", "i've booked", "ive booked",
+        "appointment is confirmed", "booking is confirmed", "appointment has been confirmed",
+        "booking has been confirmed", "confirmed your appointment", "confirmed your booking",
+        "successfully booked", "booking is complete", "booking is done"
     };
 }

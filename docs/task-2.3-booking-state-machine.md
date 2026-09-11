@@ -276,17 +276,16 @@ Then open the PR against `main` and merge once the three CI jobs are green.
 
 ---
 
-## 10. What Task 2.4 wires up
+## 10. Task numbering correction
 
-This task deliberately stops at the domain boundary. Next:
+The master plan and `phase2-handoff-spec.md` are authoritative. Task 2.4 is the
+text conversation simulator and is merged. Production action execution, timezone
+conversion, state persistence and live transfer wiring are not Phase 2 tasks.
+Task 2.5 supplies typed booking outcomes and optimistic concurrency for that future
+adapter. During an in-flight commit, a human request is retained in HandoffPending;
+the machine records the result before transferring. A lookup can transfer immediately.
 
-- The orchestrator in `CCaaS.Application` that executes the actions and persists `BookingState`
-  against the call session.
-- Timezone conversion at the edge (placeholder until Phase 5.1).
-- `Purpose` on the booking, and writing `HandoffReason` to the call record.
-- Wiring `BookingAction.TransferToHuman` to the existing
-  `IAiAgentService.RequestHandoffAsync` / `IHandoffContextSummarizer` path so the human agent
-  gets the context Section 16 already specifies.
+---
 
 ## 11. Open items carried forward
 

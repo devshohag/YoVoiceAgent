@@ -1,0 +1,38 @@
+{
+  "name": "review-ambiguous-date",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "text": "10/11 at four",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "Please say the date with the month name"
+      ],
+      "expect": {
+        "date": null,
+        "time": "16:00",
+        "selected": null
+      }
+    },
+    {
+      "kind": "say",
+      "text": "10 november at four",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-11-10:16:00:None"
+      ],
+      "says": [
+        "Let me check"
+      ],
+      "expect": {
+        "date": "2026-11-10"
+      }
+    }
+  ]
+}

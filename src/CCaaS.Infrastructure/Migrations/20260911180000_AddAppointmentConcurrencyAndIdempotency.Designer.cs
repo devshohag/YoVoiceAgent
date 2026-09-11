@@ -4,6 +4,7 @@ using CCaaS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CCaaS.Infrastructure.Migrations
 {
     [DbContext(typeof(CcaasDbContext))]
-    partial class CcaasDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260911180000_AddAppointmentConcurrencyAndIdempotency")]
+    partial class AddAppointmentConcurrencyAndIdempotency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
