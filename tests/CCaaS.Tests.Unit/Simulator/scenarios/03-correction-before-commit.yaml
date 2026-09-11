@@ -1,0 +1,112 @@
+{
+  "name": "03-correction-before-commit",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:16:00:None"
+      ],
+      "expect": {
+        "date": "2026-09-17",
+        "time": "16:00",
+        "waiting": true
+      },
+      "text": "tomorrow at four"
+    },
+    {
+      "kind": "availability",
+      "stage": "CollectingName",
+      "actions": [
+        "Speak"
+      ],
+      "expect": {
+        "selected": "17160000-0000-0000-0000-000000000000",
+        "selectedUtc": "2026-09-17T10:00:00.0000000Z"
+      },
+      "slots": [
+        {
+          "slotId": "17160000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T16:00:00",
+          "startsAtUtc": "2026-09-17T10:00:00Z",
+          "providerName": "Provider A"
+        }
+      ]
+    },
+    {
+      "kind": "say",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "expect": {
+        "name": "Rahim Uddin",
+        "reference": null
+      },
+      "text": "Rahim Uddin"
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:17:00:None"
+      ],
+      "expect": {
+        "date": "2026-09-17",
+        "time": "17:00",
+        "waiting": true
+      },
+      "text": "no, make it five instead"
+    },
+    {
+      "kind": "availability",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "expect": {
+        "name": "Rahim Uddin",
+        "selected": "17170000-0000-0000-0000-000000000000"
+      },
+      "slots": [
+        {
+          "slotId": "17170000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T17:00:00",
+          "startsAtUtc": "2026-09-17T11:00:00Z",
+          "providerName": "Provider A"
+        }
+      ]
+    },
+    {
+      "kind": "say",
+      "stage": "Booking",
+      "actions": [
+        "Speak",
+        "Commit:17170000-0000-0000-0000-000000000000:Rahim Uddin:+8801712345678"
+      ],
+      "expect": {
+        "waiting": true,
+        "reference": null,
+        "selected": "17170000-0000-0000-0000-000000000000"
+      },
+      "text": "yes"
+    },
+    {
+      "kind": "committed",
+      "stage": "Booked",
+      "actions": [
+        "Speak:closing",
+        "End:booked"
+      ],
+      "expect": {
+        "reference": "APT-SIM-001",
+        "terminal": true
+      },
+      "reference": "APT-SIM-001"
+    }
+  ]
+}

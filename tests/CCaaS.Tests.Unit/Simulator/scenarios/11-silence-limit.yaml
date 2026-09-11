@@ -1,0 +1,30 @@
+{
+  "name": "11-silence-limit",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "silence",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak",
+        "Speak"
+      ],
+      "expect": {
+        "noProgress": 1
+      }
+    },
+    {
+      "kind": "silence",
+      "stage": "Transferring",
+      "actions": [
+        "Speak:closing",
+        "Transfer:NoProgress"
+      ],
+      "expect": {
+        "noProgress": 2,
+        "terminal": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "name": "10-empty-calendar",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:16:00:None"
+      ],
+      "expect": {
+        "date": "2026-09-17",
+        "time": "16:00",
+        "waiting": true
+      },
+      "text": "tomorrow at four"
+    },
+    {
+      "kind": "availability",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "expect": {
+        "date": null,
+        "emptyLookups": 1
+      },
+      "slots": []
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-18:16:00:None"
+      ],
+      "expect": {
+        "date": "2026-09-18",
+        "time": "16:00",
+        "waiting": true
+      },
+      "text": "friday at four"
+    },
+    {
+      "kind": "availability",
+      "stage": "Transferring",
+      "actions": [
+        "Speak:closing",
+        "Transfer:NoAvailability"
+      ],
+      "expect": {
+        "emptyLookups": 2,
+        "handoff": "NoAvailability"
+      },
+      "slots": []
+    }
+  ]
+}
