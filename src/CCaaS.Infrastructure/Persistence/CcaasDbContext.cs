@@ -7,6 +7,7 @@ using CCaaS.Domain.Calls;
 using CCaaS.Domain.Campaign;
 using CCaaS.Domain.Channel;
 using CCaaS.Domain.Common;
+using CCaaS.Domain.Compliance;
 using CCaaS.Domain.Conversation;
 using CCaaS.Domain.Crm;
 using CCaaS.Domain.Followup;
@@ -118,6 +119,12 @@ public class CcaasDbContext : DbContext
     public DbSet<CallEvent> CallEvents => Set<CallEvent>();
     public DbSet<Recording> Recordings => Set<Recording>();
     public DbSet<Disposition> Dispositions => Set<Disposition>();
+    public DbSet<CallStageTiming> CallStageTimings => Set<CallStageTiming>();
+
+    // compliance - outbound consent, suppression and the audit of every pre-dial decision.
+    public DbSet<ContactConsent> ContactConsents => Set<ContactConsent>();
+    public DbSet<DoNotCallEntry> DoNotCallEntries => Set<DoNotCallEntry>();
+    public DbSet<SuppressionCheck> SuppressionChecks => Set<SuppressionCheck>();
 
     // ai
     public DbSet<AiAgent> AiAgents => Set<AiAgent>();
@@ -174,7 +181,8 @@ public class CcaasDbContext : DbContext
         ApplySchema(modelBuilder, "conversation", typeof(CCaaS.Domain.Conversation.Conversation), typeof(Participant), typeof(Interaction), typeof(Message), typeof(Attachment), typeof(Assignment), typeof(SlaEvent));
         ApplySchema(modelBuilder, "channel", typeof(ChannelAccount), typeof(ChannelCredentialRef), typeof(MessageTemplate), typeof(WebhookEvent));
         ApplySchema(modelBuilder, "telephony", typeof(SipTrunk), typeof(DidNumber), typeof(Extension), typeof(Queue), typeof(QueueMember), typeof(Ivr), typeof(RoutingRule), typeof(AsteriskNode));
-        ApplySchema(modelBuilder, "calls", typeof(CallSession), typeof(CallLeg), typeof(CallEvent), typeof(Recording), typeof(Disposition));
+        ApplySchema(modelBuilder, "calls", typeof(CallSession), typeof(CallLeg), typeof(CallEvent), typeof(Recording), typeof(Disposition), typeof(CallStageTiming));
+        ApplySchema(modelBuilder, "compliance", typeof(ContactConsent), typeof(DoNotCallEntry), typeof(SuppressionCheck));
         ApplySchema(modelBuilder, "ai", typeof(AiAgent), typeof(AiAgentVersion), typeof(AiConversation), typeof(AiConversationTurn), typeof(AiToolDefinition), typeof(AiToolExecution), typeof(AiUsageRecord));
         ApplySchema(modelBuilder, "appointment", typeof(AppointmentProvider), typeof(AppointmentAvailabilitySlot), typeof(AppointmentBooking));
         ApplySchema(modelBuilder, "followup", typeof(FollowUpTask), typeof(Callback), typeof(Reminder));
@@ -191,6 +199,11 @@ public class CcaasDbContext : DbContext
             .HasIndex(x => new { x.TenantId, x.AvailabilitySlotId }).IsUnique();
         modelBuilder.Entity<AppointmentBooking>()
             .HasIndex(x => new { x.TenantId, x.BookingReference }).IsUnique();
+
+        ConfigurePhoneLookupIndexes(modelBuilder);
+        ConfigureComplianceIndexes(modelBuilder);
+        ConfigureDialerIndexes(modelBuilder);
+        ConfigureCallTelemetryIndexes(modelBuilder);
 
         // Section 7 security invariant, enforced at the model level:
         // "Tenant A must never be able to read, modify, export, search, stream, or download
@@ -221,6 +234,88 @@ public class CcaasDbContext : DbContext
                 modelBuilder.Entity(clrType).HasQueryFilter(filter);
             }
         }
+    }
+
+    /// <summary>
+    /// Phone lookups are on the pre-dial hot path: before any outbound channel is created the
+    /// platform must answer "is this number suppressed, and do we hold consent for it".
+    /// Those questions are asked by normalised number, so the normalised columns are indexed.
+    ///
+    /// Deliberately NOT unique. A shared household or office line legitimately belongs to more
+    /// than one contact, and forcing uniqueness would both reject valid data and make the
+    /// migration fail on any existing duplicate. De-duplication on list upload is a business
+    /// decision made in application code, not a constraint imposed by the schema.
+    /// </summary>
+    private static void ConfigurePhoneLookupIndexes(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Customer>()
+            .HasIndex(x => new { x.TenantId, x.PhoneE164 })
+            .HasFilter("[PhoneE164] IS NOT NULL");
+
+        modelBuilder.Entity<Lead>()
+            .HasIndex(x => new { x.TenantId, x.PhoneE164 })
+            .HasFilter("[PhoneE164] IS NOT NULL");
+
+        modelBuilder.Entity<Contact>()
+            .HasIndex(x => new { x.TenantId, x.ValueNormalized })
+            .HasFilter("[ValueNormalized] IS NOT NULL");
+    }
+
+    private static void ConfigureComplianceIndexes(ModelBuilder modelBuilder)
+    {
+        // The suppression lookup. Unique on (tenant, number, scope) because a number can be
+        // blocked once per scope - a second identical row would be a write bug, not new data.
+        modelBuilder.Entity<DoNotCallEntry>()
+            .HasIndex(x => new { x.TenantId, x.PhoneE164, x.Scope }).IsUnique();
+
+        // "Most recent effective consent for this number on this channel" - the ordering is
+        // part of the index because the query always takes the newest row, never a scan.
+        modelBuilder.Entity<ContactConsent>()
+            .HasIndex(x => new { x.TenantId, x.PhoneE164, x.Channel, x.GrantedAtUtc })
+            .IsDescending(false, false, false, true);
+
+        // Audit reads are "show me every decision for this number", newest first.
+        modelBuilder.Entity<SuppressionCheck>()
+            .HasIndex(x => new { x.TenantId, x.PhoneE164, x.CheckedAtUtc })
+            .IsDescending(false, false, true);
+
+        // Campaign reporting: how many contacts were blocked, and for which reason.
+        modelBuilder.Entity<SuppressionCheck>()
+            .HasIndex(x => new { x.TenantId, x.CampaignId, x.Result, x.Reason });
+    }
+
+    /// <summary>
+    /// The dialer's hot query, run continuously while a campaign is live:
+    /// "the next contacts for this campaign that are Pending and now due".
+    /// Composite order matters - tenant, then campaign, then state, then due time - so the
+    /// index can be seeked rather than scanned as the campaign table grows.
+    /// </summary>
+    private static void ConfigureDialerIndexes(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CampaignLead>()
+            .HasIndex(x => new { x.TenantId, x.CampaignId, x.State, x.NextAttemptAt });
+    }
+
+    private static void ConfigureCallTelemetryIndexes(ModelBuilder modelBuilder)
+    {
+        // Reading one call in the console: every stage of every turn, in order.
+        modelBuilder.Entity<CallStageTiming>()
+            .HasIndex(x => new { x.TenantId, x.CallSessionId, x.TurnNo });
+
+        // The latency dashboard: p50/p95 for one stage over a time range.
+        modelBuilder.Entity<CallStageTiming>()
+            .HasIndex(x => new { x.TenantId, x.Stage, x.StartedAt });
+
+        // Origination idempotency. Filtered so the many calls without a key (every inbound
+        // call) do not collide with each other on NULL.
+        modelBuilder.Entity<CallSession>()
+            .HasIndex(x => new { x.TenantId, x.IdempotencyKey })
+            .IsUnique()
+            .HasFilter("[IdempotencyKey] IS NOT NULL");
+
+        // Campaign reporting and the console's campaign filter.
+        modelBuilder.Entity<CallSession>()
+            .HasIndex(x => new { x.TenantId, x.CampaignId, x.Status });
     }
 
     private LambdaExpression BuildBaseEntityFilter<T>() where T : BaseEntity
