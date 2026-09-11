@@ -237,8 +237,14 @@ public class CallsController : ApiControllerBase
                 && (call.CustomerId != null ? x.CustomerId == call.CustomerId : x.FromNumber == call.FromNumber))
             .OrderByDescending(x => x.StartedAt).Take(10)
             .Select(x => new { x.Id, x.StartedAt, x.EndedAt, status = x.Status.ToString(), x.DispositionId }).ToListAsync(ct);
+        // The two branches of this conditional must produce the SAME anonymous type, including
+        // nullability. CallSession.FromNumber is non-nullable and Customer.Phone is nullable,
+        // so without the cast the first branch types 'phone' as string and the second as
+        // string?, and the compiler reports CS8619. That is a nullability warning, which a
+        // local Debug build prints and walks past - but CI builds with --warnaserror, so it
+        // fails there instead. Do not "tidy" the cast away.
         return Ok(new { customer = customer is null
-                ? new { id = (Guid?)null, name = $"Caller {call.FromNumber}", phone = call.FromNumber, email = (string?)null }
+                ? new { id = (Guid?)null, name = $"Caller {call.FromNumber}", phone = (string?)call.FromNumber, email = (string?)null }
                 : new { id = (Guid?)customer.Id, name = customer.Name, phone = customer.Phone, email = customer.Email },
             notes, history });
     }
