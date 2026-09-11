@@ -305,9 +305,15 @@ public sealed class BookingConversationMachine
     {
         var today = Today(context);
 
-        var usable = state.DayPart == DayPart.None
-            ? slots
-            : slots.Where(s => MatchesDayPart(TimeOnly.FromDateTime(s.StartsAtLocal), state.DayPart)).ToList();
+        // The day filter guards against an orchestrator returning slots for a date nobody
+        // asked about. Selecting one would quietly move the appointment to another day; the
+        // readback would say the new date, but a caller half-listening would not catch it.
+        // Dropping them instead turns that bug into "nothing free", which ends with a person.
+        var usable = slots
+            .Where(s => state.Date is null || DateOnly.FromDateTime(s.StartsAtLocal) == state.Date.Value)
+            .Where(s => state.DayPart == DayPart.None
+                        || MatchesDayPart(TimeOnly.FromDateTime(s.StartsAtLocal), state.DayPart))
+            .ToList();
 
         if (usable.Count == 0)
         {
@@ -542,11 +548,9 @@ public sealed class BookingConversationMachine
         if (wanted is null)
             return slots.OrderBy(s => s.StartsAtLocal);
 
-        var target = MinutesIntoDay(wanted.Value);
+        var target = wanted.Value.Hour * 60 + wanted.Value.Minute;
         return slots
-            .OrderBy(s => Math.Abs(MinutesIntoDay(TimeOnly.FromDateTime(s.StartsAtLocal)) - target))
+            .OrderBy(s => Math.Abs((s.StartsAtLocal.Hour * 60 + s.StartsAtLocal.Minute) - target))
             .ThenBy(s => s.StartsAtLocal);
     }
-
-    private static int MinutesIntoDay(TimeOnly time) => time.Hour * 60 + time.Minute;
 }

@@ -14,7 +14,10 @@
         "handoff": "CallerAsked",
         "terminal": true
       },
-      "text": "can I talk to a real person please"
+      "text": "can I talk to a real person please",
+      "says": [
+        "Of course - let me put you through to a colleague."
+      ]
     }
   ]
 }

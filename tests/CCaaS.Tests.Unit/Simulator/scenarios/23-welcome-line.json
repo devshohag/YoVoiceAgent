@@ -1,0 +1,115 @@
+{
+  "name": "23-welcome-line",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:none:Morning"
+      ],
+      "says": [
+        "Let me check that for you."
+      ],
+      "text": "tomorrow morning",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "availability",
+      "stage": "OfferingAlternatives",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "Tomorrow I have half past nine in the morning, or eleven o'clock in the morning. Which suits you?"
+      ],
+      "slots": [
+        {
+          "slotId": "17093000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T09:30:00",
+          "startsAtUtc": "2026-09-17T03:30:00Z",
+          "providerName": "Provider A"
+        },
+        {
+          "slotId": "17110000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T11:00:00",
+          "startsAtUtc": "2026-09-17T05:00:00Z",
+          "providerName": "Provider A"
+        },
+        {
+          "slotId": "17150000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T15:00:00",
+          "startsAtUtc": "2026-09-17T09:00:00Z",
+          "providerName": "Provider A"
+        }
+      ],
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CollectingName",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "And what name should I put the appointment under?"
+      ],
+      "text": "eleven please",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "So that's tomorrow at eleven o'clock in the morning for Rahim Uddin. Shall I book it?"
+      ],
+      "text": "my name is Rahim Uddin",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "Booking",
+      "actions": [
+        "Speak",
+        "Commit:17110000-0000-0000-0000-000000000000:Rahim Uddin:+8801712345678"
+      ],
+      "says": [
+        "Booking that now."
+      ],
+      "text": "yes",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "committed",
+      "stage": "Booked",
+      "actions": [
+        "Speak:closing",
+        "End:booked"
+      ],
+      "says": [
+        "You're booked for tomorrow at eleven o'clock in the morning. Your reference is zero two three. You'll get a text message with the details. Thanks for choosing us."
+      ],
+      "reference": "APT-SIM-023",
+      "expect": {
+        "reference": "APT-SIM-023",
+        "terminal": true
+      }
+    }
+  ],
+  "welcome": "Hello, this is the booking line for ASG Security."
+}

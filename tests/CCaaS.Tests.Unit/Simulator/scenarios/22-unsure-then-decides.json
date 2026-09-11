@@ -1,0 +1,144 @@
+{
+  "name": "22-unsure-then-decides",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:16:00:None"
+      ],
+      "says": [
+        "Let me check that for you."
+      ],
+      "text": "tomorrow at four",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "availability",
+      "stage": "OfferingAlternatives",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "That time is taken. I have tomorrow at three o'clock in the afternoon, or tomorrow at five o'clock in the evening. Which would you prefer?"
+      ],
+      "slots": [
+        {
+          "slotId": "17150000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T15:00:00",
+          "startsAtUtc": "2026-09-17T09:00:00Z",
+          "providerName": "Provider A"
+        },
+        {
+          "slotId": "17170000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T17:00:00",
+          "startsAtUtc": "2026-09-17T11:00:00Z",
+          "providerName": "Provider A"
+        }
+      ],
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "Which day would you like to come in?"
+      ],
+      "text": "I don't really mind, whatever suits you",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-18:11:00:None"
+      ],
+      "says": [
+        "Let me check that for you."
+      ],
+      "text": "friday at eleven",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "availability",
+      "stage": "CollectingName",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "And what name should I put the appointment under?"
+      ],
+      "slots": [
+        {
+          "slotId": "18110000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-18T11:00:00",
+          "startsAtUtc": "2026-09-18T05:00:00Z",
+          "providerName": "Provider A"
+        }
+      ],
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "So that's Friday the eighteenth at eleven o'clock in the morning for Nusrat. Shall I book it?"
+      ],
+      "text": "Nusrat",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "Booking",
+      "actions": [
+        "Speak",
+        "Commit:18110000-0000-0000-0000-000000000000:Nusrat:+8801712345678"
+      ],
+      "says": [
+        "Booking that now."
+      ],
+      "text": "go ahead",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "committed",
+      "stage": "Booked",
+      "actions": [
+        "Speak:closing",
+        "End:booked"
+      ],
+      "says": [
+        "You're booked for Friday the eighteenth at eleven o'clock in the morning. Your reference is zero two two. You'll get a text message with the details. Thanks for choosing us."
+      ],
+      "reference": "APT-SIM-022",
+      "expect": {
+        "reference": "APT-SIM-022",
+        "terminal": true
+      }
+    }
+  ]
+}

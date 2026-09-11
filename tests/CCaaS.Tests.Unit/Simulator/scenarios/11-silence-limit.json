@@ -12,7 +12,11 @@
       ],
       "expect": {
         "noProgress": 1
-      }
+      },
+      "says": [
+        "Sorry, I didn't catch that. Could you say it again?",
+        "Which day would you like to come in?"
+      ]
     },
     {
       "kind": "silence",
@@ -24,7 +28,10 @@
       "expect": {
         "noProgress": 2,
         "terminal": true
-      }
+      },
+      "says": [
+        "Let me put you through to a colleague who can help."
+      ]
     }
   ]
 }

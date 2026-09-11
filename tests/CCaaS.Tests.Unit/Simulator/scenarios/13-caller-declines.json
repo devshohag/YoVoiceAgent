@@ -14,7 +14,10 @@
         "terminal": true,
         "reference": null
       },
-      "text": "not interested"
+      "text": "not interested",
+      "says": [
+        "No problem at all. Thanks for your time, and have a good day."
+      ]
     }
   ]
 }
