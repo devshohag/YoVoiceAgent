@@ -1,0 +1,174 @@
+{
+  "name": "21-long-call-two-corrections",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "What time on Tuesday the twenty second?"
+      ],
+      "text": "next tuesday",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-22:10:00:None"
+      ],
+      "says": [
+        "Let me check that for you."
+      ],
+      "text": "at ten",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "availability",
+      "stage": "CollectingName",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "And what name should I put the appointment under?"
+      ],
+      "slots": [
+        {
+          "slotId": "22100000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-22T10:00:00",
+          "startsAtUtc": "2026-09-22T04:00:00Z",
+          "providerName": "Provider A"
+        }
+      ],
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "So that's Tuesday the twenty second at ten o'clock in the morning for Karim Ahmed. Shall I book it?"
+      ],
+      "text": "Karim Ahmed",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-22:15:00:None"
+      ],
+      "says": [
+        "Let me check that for you."
+      ],
+      "text": "actually can we make it three instead",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "availability",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "So that's Tuesday the twenty second at three o'clock in the afternoon for Karim Ahmed. Shall I book it?"
+      ],
+      "slots": [
+        {
+          "slotId": "22150000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-22T15:00:00",
+          "startsAtUtc": "2026-09-22T09:00:00Z",
+          "providerName": "Provider A"
+        }
+      ],
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-22:16:30:None"
+      ],
+      "says": [
+        "Let me check that for you."
+      ],
+      "text": "hmm no, half past four would be better",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "availability",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "says": [
+        "So that's Tuesday the twenty second at half past four in the afternoon for Karim Ahmed. Shall I book it?"
+      ],
+      "slots": [
+        {
+          "slotId": "22163000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-22T16:30:00",
+          "startsAtUtc": "2026-09-22T10:30:00Z",
+          "providerName": "Provider A"
+        }
+      ],
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "Booking",
+      "actions": [
+        "Speak",
+        "Commit:22163000-0000-0000-0000-000000000000:Karim Ahmed:+8801712345678"
+      ],
+      "says": [
+        "Booking that now."
+      ],
+      "text": "yes that's perfect",
+      "expect": {
+        "reference": null
+      }
+    },
+    {
+      "kind": "committed",
+      "stage": "Booked",
+      "actions": [
+        "Speak:closing",
+        "End:booked"
+      ],
+      "says": [
+        "You're booked for Tuesday the twenty second at half past four in the afternoon. Your reference is zero two one. You'll get a text message with the details. Thanks for choosing us."
+      ],
+      "reference": "APT-SIM-021",
+      "expect": {
+        "reference": "APT-SIM-021",
+        "terminal": true
+      }
+    }
+  ]
+}

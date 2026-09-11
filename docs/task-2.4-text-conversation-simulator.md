@@ -1,62 +1,81 @@
 # Task 2.4 — Text conversation simulator
 
-**Phase 2 — Appointment brain · Branch:** `feat/task-2.4-text-conversation-simulator`
+**Phase 2 · Branch:** `feat/task-2.4-text-conversation-simulator`
 **Depends on:** Task 2.3 merged into `main`.
-**Package base commit:** `1f84ff09e8d8cab49b6042e594cede24ed68d589`
 
 ---
 
-## 1. What this task delivers
+## 1. What this is, and what it is not
 
-A test-only text conversation simulator using the actual Task 2.3
-`BookingConversationMachine`, `EnglishDateTimeParser` and English phrase bank.
-It accepts transcript strings and scripted system replies, retaining every turn's
-state, collected slots, ordered actions and spoken lines. The xUnit runner compares
-these with scenario expectations and writes a readable turn trace to test output.
+A test-only harness that drives the real Task 2.3 `BookingConversationMachine`,
+`EnglishDateTimeParser` and English phrase bank through scripted transcripts, then asserts the
+stage, the words, the collected values and the exact database actions — in order — at every
+turn.
 
-This implements Task 2.4 from the supplied master plan. Section 10 of the Task 2.3
-document describes a production orchestrator; that is not included here. The master
-plan's simulator scope takes precedence. Existing domain contracts are preserved,
-including contact supplied at Begin, rather than collected through a new phone stage.
+**It is not the orchestrator.** Section 10 of the Task 2.3 document describes wiring the
+machine to `IAppointmentService`, persisting `BookingState` against the call session, converting
+timezones at the edge and routing `TransferToHuman` into `RequestHandoffAsync`. None of that is
+here. After merging this, no call can book anything.
 
-| File | Purpose |
-|---|---|
-| `tests/CCaaS.Tests.Unit/Simulator/TextConversationSimulator.cs` | Scenario loader, simulator and stable state/action projection |
-| `tests/CCaaS.Tests.Unit/Simulator/TextConversationSimulatorTests.cs` | Data-driven xUnit runner, deterministic replay and invalid system-input checks |
-| `tests/CCaaS.Tests.Unit/Simulator/scenarios/*.yaml` | 20 scenarios, 99 scripted steps |
-| `tests/CCaaS.Tests.Unit/CCaaS.Tests.Unit.csproj` | Copy YAML fixtures into test output; only existing-file modification |
-| `docs/task-2.4-text-conversation-simulator.md` | Scope, format, verification and application commands |
+Two things follow from that, and both matter more than the green tick:
 
-No production code, domain contracts, database schema, provider settings or CI workflows
-are modified. No NuGet dependency is added.
+- Every `Commit:` in these fixtures is an assertion about a **payload**, never an execution.
+  Nothing touches SQL, so this proves nothing about transactions, concurrency, or duplicate
+  bookings under load.
+- Every fixture commits with the contact `+8801712345678`. The real
+  `AppointmentService.NormalizeContact` **rejects** E.164 and accepts only local 11-digit
+  Bangladesh numbers. A fully green simulator therefore sits directly on top of a booking path
+  that would fail on the first real call. That is Task 2.5, and it is still open.
 
----
-
-## 2. Scenario format
-
-Files use **YAML 1.2's JSON-compatible flow syntax**. This is intentionally a restricted
-format parsed with the existing System.Text.Json runtime, not a general YAML parser.
-Keep the quoted keys, braces and arrays shown in the supplied files. Block-style YAML,
-comments, anchors and tags are not supported. This avoids introducing a dependency or
-maintaining a custom YAML parser for this task. Files were also checked with a YAML parser.
-
-Each scenario supplies a fixed `nowLocal` wall clock, contact, optional business hours
-and policy, followed by ordered steps. The machine starts with `Begin(contact)`.
-Each step declares the expected stage and the **entire ordered action list**, including
-an empty list when nothing should happen. Optional `expect` fields check collected
-values; explicit null checks that a value was cleared. Unknown expectation fields fail.
-
-Input kinds:
-
-| Kind | Required input | Meaning |
+| File | Change | Purpose |
 |---|---|---|
-| `say` | `text` | One raw transcript string |
-| `silence` | none | Caller endpointer timeout |
-| `availability` | `slots` (may be empty) | Scripted lookup response; only while checking availability |
-| `committed` | `reference` | Scripted successful commit; only while booking |
-| `rejected` | `failure` | SlotTaken, InvalidDetails or SystemError; only while booking |
+| `tests/CCaaS.Tests.Unit/Simulator/TextConversationSimulator.cs` | new | Scenario model, loader, simulator, stable projection |
+| `tests/CCaaS.Tests.Unit/Simulator/TextConversationSimulatorTests.cs` | new | Data-driven runner, cross-scenario invariants |
+| `tests/CCaaS.Tests.Unit/Simulator/scenarios/*.json` | new | 23 scenarios, 118 scripted steps |
+| `tests/CCaaS.Tests.Unit/CCaaS.Tests.Unit.csproj` | modified | Copy fixtures to test output |
+| `src/CCaaS.Domain/Scheduling/Booking/BookingPhrases.cs` | modified | Two phrasing bugs found by this work |
+| `src/CCaaS.Domain/Scheduling/Booking/BookingConversationMachine.cs` | modified | Availability is filtered by the requested day |
+| `tests/CCaaS.Tests.Unit/Scheduling/BookingPhrasesTests.cs` | modified | Cover the corrected phrasing |
 
-For example, one caller step is:
+No NuGet dependency. No schema, provider or CI change.
+
+---
+
+## 2. What building this found
+
+Writing the simulator meant generating the agent's **actual words** for the first time, rather
+than the tags the Task 2.3 unit tests assert. Three defects surfaced immediately.
+
+**1 — "What time on tomorrow?"** `AskWhatTime`, `NothingFreeThatDay` and `OfferTimes` all glued
+a preposition to a date that already carried one: *"What time on tomorrow?"*, *"there's nothing
+free on today"*, *"On tomorrow I have…"*. Every unit test passed, because they assert tags.
+Fixed with `SpeakDateWithPreposition` — a relative day takes no preposition, a named day takes
+"on". This is the exact class of wrongness that makes a caller notice they are talking to a
+machine.
+
+**2 — availability was trusted blindly.** `OnAvailability` accepted any slot the orchestrator
+returned, including one for a day nobody asked about. `Select` then adopted that slot's date, so
+the appointment quietly moved. The readback would say the new date, but a half-listening caller
+would not catch it. Slots are now filtered by the requested day, which turns an orchestrator bug
+into "nothing free" — and that ends with a person on the line.
+
+**3 — the original package never asserted a single spoken word.** `Describe` collapsed every
+line to `"Speak"`, and `SpokenLines` was printed but never compared. Every phrase could have
+been replaced with gibberish, or with "you're booked" before the commit, and all twenty
+scenarios would still have passed. That is addressed below.
+
+The twenty original fixtures were independently replayed against a separate implementation of
+the machine and **matched on every stage and every action** — the flow assertions in that
+package were correct. It was the wording that was unguarded.
+
+---
+
+## 3. Scenario format
+
+Fixtures are **JSON**, with a `.json` extension, parsed by `System.Text.Json`. The previous
+version named them `.yaml` on the grounds that JSON is a YAML 1.2 subset — true, but the first
+person to open one and write a comment or an unquoted key gets a `JsonException` and no idea
+why. The extension now matches the parser.
 
 ```json
 {
@@ -64,136 +83,171 @@ For example, one caller step is:
   "text": "tomorrow at four",
   "stage": "CheckingAvailability",
   "actions": ["Speak", "Lookup:2026-09-17:16:00:None"],
-  "expect": {"date": "2026-09-17", "time": "16:00", "waiting": true}
+  "says": ["Let me check that for you."],
+  "expect": { "date": "2026-09-17", "time": "16:00", "waiting": true }
 }
 ```
 
-Slots provide explicit local and UTC timestamps and stable IDs. The simulator carries
-these through rather than reading the wall clock or the machine's local timezone.
-It does not validate a timezone conversion implementation: that belongs to the adapter
-that will eventually supply these values in production.
+| Field | Meaning |
+|---|---|
+| `kind` | `say` (needs `text`), `silence`, `availability` (needs `slots`), `committed` (needs `reference`), `rejected` (needs `failure`) |
+| `stage` | Stage the machine must be in after this input |
+| `actions` | The **entire ordered** action list, including an empty list when nothing should happen |
+| `says` | One entry per spoken line, matched as a case-insensitive substring |
+| `expect` | Optional value checks; an explicit `null` asserts a value was cleared. Unknown fields fail the test |
 
-`Speak` and `Speak:closing` check action order and whether another reply is expected.
-The real spoken text appears in the trace; copy changes do not break flow assertions.
-`Lookup` includes requested date/time/day part. `Commit` includes the exact slot ID,
-caller name and contact. `Transfer` and `End` include their reason.
+Scenario-level: `name`, `nowLocal` (a fixed wall clock, no `Z` and no offset), `contact`,
+optional `welcome`, optional `businessOpen`/`businessClose`, optional `policy`.
 
----
+`policy` may set any subset of its four fields; the rest keep their real defaults. That is why
+it deserialises through `PolicyOverride` — a plain class with property initialisers — rather
+than straight into the `BookingPolicy` record. Relying on the serialiser to honour positional
+record defaults would silently set `MaxTurns` to zero, and every call would transfer on its
+first turn. `A_partial_policy_block_keeps_the_real_defaults_for_everything_else` asserts it.
 
-## 3. Coverage and limits
-
-The 20 scenario tests cover:
-
-- Complete booking and split date/time collection.
-- Correction before committing; name retained; corrected slot is committed.
-- Nearest alternatives, earlier/equidistant slots and accepting a single alternative.
-- Ambiguous morning/evening resolution.
-- Scripted slot-race recovery and a fresh confirmation before the second commit.
-- SystemError and InvalidDetails handoff without a booking reference.
-- Repeated empty availability, silence limit and caller-requested handoff.
-- Declining, rejecting a readback and handing off at readback without a write.
-- Late caller events after booking and caller events during pending database work.
-- Past time rejection and recovery.
-- RequireName=false and the caller-turn ceiling.
-
-Three additional xUnit cases reject unsolicited availability/commit/failure replies
-at the simulator boundary. Each scenario runs twice and compares complete traces to
-check replay determinism and isolation. Expected addition: **23 xUnit cases**.
-
-Database actions are asserted, not executed. This does not prove real SQL concurrency,
-transaction rollback, idempotency or zero duplicate bookings under load. Those remain
-Task 2.5/2.7 and the Phase 2 gate. It does not add live telephony, an application
-orchestrator, persisted state, cancellation/rescheduling APIs or extra machine stages.
+System replies are only accepted when the machine actually asked for them: an `availability`
+step outside `CheckingAvailability`, or a `committed` outside `Booking`, throws. A fixture
+cannot invent a database answer.
 
 ---
 
-## 4. Verification in the authoring environment
+## 4. Invariants checked on every scenario
 
-- YAML and JSON decoding: 20 files validated; 99 steps.
-- Fixture fields, input sequencing against declared expected states, enum names,
-  timestamps, slot IDs and scenario names checked statically.
-- Project XML and whitespace diff checked.
-- Package contents checked against the changed-file list and source bytes.
-- No .NET SDK is available in this environment; SDK download was blocked. The C# build
-  and xUnit suite have **not been executed here**. No passing CI or merge clearance is
-  claimed. Run the commands below and require all existing PR checks to pass.
+A fixture only catches what its author thought to assert. These four are checked on every frame
+of every scenario, so a future change cannot quietly break them:
+
+1. **No booking is claimed before one exists.** While `BookingReference` is null, no spoken line
+   may contain a booking claim ("you're booked", "I've booked"…) or the spoken form of any
+   reference the scenario later commits. This is the property the whole state machine exists to
+   guarantee, and the one a customer would actually be harmed by.
+2. **A closing line ends something.** Any `Speak` with `ExpectsReply = false` must share its turn
+   with a `Transfer` or an `End` — otherwise telephony stops listening and the caller is left
+   talking to a silent line.
+3. **The readback carries the details.** In `ConfirmingBooking`, the last spoken line must
+   contain the spoken time of the selected slot and the name the booking will be made under.
+   A confirmation the caller cannot check is not a confirmation.
+4. **A booked call committed the slot it agreed to.** Reaching `Booked` requires a matching
+   `Commit` action earlier in the same call.
+
+`Every_scenario_asserts_what_the_agent_says` additionally fails if any scenario is added without
+`says`, so wording coverage cannot quietly rot.
 
 ---
 
-## 5. Apply — Windows / PowerShell
+## 5. Coverage
 
-Start from a clean worktree, with Task 2.3 merged. This ZIP contains complete files and
-extracts directly into the repository root; there is no extra wrapping directory.
-The base commit above identifies exactly which test-project file it was built against.
-If that file has since changed on main, review its diff before committing so newer
-project entries are not lost during extraction.
+Twenty scenarios carried over (happy path, split collection, corrections, alternatives, ambiguous
+hour, slot race, `SystemError`/`InvalidDetails`, empty calendar, silence, handoff, declining,
+late events, past times, `RequireName=false`, turn ceiling), plus three new ones that the Task
+2.3 unit tests do not reach:
+
+| Scenario | Why it earns its place |
+|---|---|
+| `21-long-call-two-corrections` | Ten turns, the caller changes their mind twice; the date set on turn 1 survives both corrections and the name survives all of them |
+| `22-unsure-then-decides` | "I don't really mind, whatever suits you" is `Unsure`, not a refusal — then the caller names a different day entirely |
+| `23-welcome-line` | The opening line from the agent configuration, which nothing tested before |
+
+**Expected: 27 xUnit cases** — 23 scenarios plus three invalid-system-reply cases, the partial
+policy check, and the says-coverage check.
+
+The overlap with `BookingConversationMachineTests` is deliberate and kept. Two independent
+encodings of the same behaviour have already earned their cost once on this project: the Python
+port and the C# suite disagreed about `TimeOnly` subtraction, and only having both caught it.
+The suites run in milliseconds; the duplication is cheaper than the class of bug it finds.
+
+---
+
+## 6. Verification in the authoring environment
+
+No .NET SDK here, so the machine was replayed through an independent Python port:
+
+- 23 fixtures replayed: **0 mismatches** on stage, actions, `says`, and every `expect` field.
+- All four invariants evaluated against all 23: **0 violations**.
+- The Task 2.3 behavioural suite re-run after both production changes: **116 checks, 0 failures**.
+
+The C# build and the xUnit suite have **not** been executed here. Wording assertions are the
+likeliest place for a port-versus-platform divergence to show up — that is exactly how the
+`TimeOnly` bug was found last time — so if a `says` assertion fails, send me the diff rather
+than editing the fixture.
+
+---
+
+## 7. Apply — Windows / PowerShell
+
+If the earlier `.yaml` version of this package was ever extracted, remove it first, or both
+formats will be copied to the output.
 
 ```powershell
 cd D:\yovoiceagent-clean
 
-git status --short
 git checkout main
 git pull --ff-only origin main
 git checkout -b feat/task-2.4-text-conversation-simulator
 
-Expand-Archive -Path "$env:USERPROFILE\Downloads\task-2.4-text-conversation-simulator.zip" `
-               -DestinationPath . -Force
+if (Test-Path tests\CCaaS.Tests.Unit\Simulator) { Remove-Item -Recurse -Force tests\CCaaS.Tests.Unit\Simulator }
+
+$zip = Get-ChildItem "$env:USERPROFILE\Downloads" -Filter "task-2.4-*.zip" |
+       Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $zip) { throw "No task-2.4 zip in Downloads" }
+"Extracting $($zip.Name)  ($($zip.LastWriteTime))"
+Expand-Archive -Path $zip.FullName -DestinationPath . -Force
 
 git status --short
-git diff -- tests/CCaaS.Tests.Unit/CCaaS.Tests.Unit.csproj
 ```
 
-Expected: one modified test-project file; new simulator directory and task document.
-Git may collapse the 22 new simulator files into a single directory entry.
+Expect four modified files and one new directory. **No EF migration** — no entity, no schema
+change.
 
 ---
 
-## 6. Build and test
+## 8. Build and test
 
 ```powershell
 dotnet restore CCaaS.sln
-dotnet build CCaaS.sln -c Release --no-restore --warnaserror
-dotnet test CCaaS.sln -c Release --no-build
+dotnet build CCaaS.sln -c Release --warnaserror
+dotnet test  CCaaS.sln -c Release
 ```
 
-Focused run with readable transcript output:
+Readable transcripts for one scenario set:
 
 ```powershell
-dotnet test tests/CCaaS.Tests.Unit/CCaaS.Tests.Unit.csproj -c Release --no-build `
-    --filter "FullyQualifiedName~TextConversationSimulatorTests" `
+dotnet test tests/CCaaS.Tests.Unit/CCaaS.Tests.Unit.csproj -c Release `
+    --filter "FullyQualifiedName~TextConversationSimulator" `
     --logger "console;verbosity=detailed"
 ```
 
-The existing CI also runs frontend and compose/script checks. Local backend success
-alone is not full CI clearance. A feature-branch push requires a PR to trigger the
-current pull-request workflow.
-
 ---
 
-## 7. Commit and push
-
-Only continue after build/test and diff review succeed.
+## 9. Commit and push
 
 ```powershell
-git add tests/CCaaS.Tests.Unit/Simulator tests/CCaaS.Tests.Unit/CCaaS.Tests.Unit.csproj docs/task-2.4-text-conversation-simulator.md
-git diff --cached --stat
-git commit -m "test(scheduling): add text conversation simulator and YAML scenarios"
+git add .
+git commit -m "test(scheduling): text conversation simulator with spoken-line assertions
+
+Drives the Task 2.3 machine, parser and phrase bank through 23 scripted
+transcripts, asserting stage, spoken words, collected values and the ordered
+database actions each turn. Four invariants are checked on every scenario,
+the first being that no booking may be claimed before a commit comes back.
+
+Fixtures are JSON with a .json extension and deserialise policy through a
+plain override type, so a partial policy block keeps the real defaults
+instead of silently zeroing the call-length ceiling.
+
+Fixes two defects this work exposed: date phrasings glued a preposition to
+a relative day ('What time on tomorrow?'), and availability was accepted for
+days the caller never asked about, which quietly moved the appointment."
+
 git push -u origin feat/task-2.4-text-conversation-simulator
 ```
 
-Open a PR from this branch to `main`. The master plan marks Task 2.4 with a star:
-obtain the three reviews and wait for backend, frontend and compose checks to pass,
-then merge through the user's review workflow. Nothing is pushed or merged by this package.
+---
 
-Suggested PR title: `Task 2.4: text conversation simulator and YAML scenarios`
+## 10. Still open
 
-Suggested PR body:
-
-> Booking flow decisions need reproducible transcript tests before live voice wiring.
-> This adds a test-only simulator around the existing Task 2.3 machine, with 20 YAML
-> scenarios covering 99 scripted steps and three invalid system-reply cases. Tests
-> assert states, collected slots and ordered database-action payloads, and replay
-> scenarios for determinism. Production code and contracts are unchanged. The test
-> project only gains fixture-copy metadata. Authoring checks validated fixture syntax
-> and packaging; C# build/xUnit require local execution and CI because the authoring
-> environment has no .NET SDK.
+- **Task 2.5** — retire `AppointmentService.NormalizeContact` in favour of `PhoneNumber`.
+  Until this lands, every booking this flow would attempt is rejected for its phone number.
+- **The orchestrator** — execute the actions, persist `BookingState`, convert timezones at the
+  edge, wire `TransferToHuman` to the existing handoff path. Do not tick Task 2.4 as "the flow
+  is wired" on the strength of this package.
+- **Phase 5.1** — timezone fallback chain (contact → campaign → tenant) supplying `NowLocal`
+  and `StartsAtLocal`.

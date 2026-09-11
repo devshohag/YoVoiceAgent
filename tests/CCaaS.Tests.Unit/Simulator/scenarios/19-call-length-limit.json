@@ -10,7 +10,10 @@
         "Speak"
       ],
       "expect": {},
-      "text": "tomorrow"
+      "text": "tomorrow",
+      "says": [
+        "What time tomorrow?"
+      ]
     },
     {
       "kind": "say",
@@ -23,7 +26,10 @@
         "handoff": "CallLengthExceeded",
         "callerTurns": 2
       },
-      "text": "at four"
+      "text": "at four",
+      "says": [
+        "Let me put you through to a colleague who can help."
+      ]
     }
   ],
   "policy": {

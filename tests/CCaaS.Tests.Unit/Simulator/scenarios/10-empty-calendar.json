@@ -15,7 +15,10 @@
         "time": "16:00",
         "waiting": true
       },
-      "text": "tomorrow at four"
+      "text": "tomorrow at four",
+      "says": [
+        "Let me check that for you."
+      ]
     },
     {
       "kind": "availability",
@@ -27,7 +30,10 @@
         "date": null,
         "emptyLookups": 1
       },
-      "slots": []
+      "slots": [],
+      "says": [
+        "I'm sorry, there's nothing free tomorrow. Would another day work?"
+      ]
     },
     {
       "kind": "say",
@@ -41,7 +47,10 @@
         "time": "16:00",
         "waiting": true
       },
-      "text": "friday at four"
+      "text": "friday at four",
+      "says": [
+        "Let me check that for you."
+      ]
     },
     {
       "kind": "availability",
@@ -54,7 +63,10 @@
         "emptyLookups": 2,
         "handoff": "NoAvailability"
       },
-      "slots": []
+      "slots": [],
+      "says": [
+        "Let me put you through to a colleague who can look at more dates."
+      ]
     }
   ]
 }

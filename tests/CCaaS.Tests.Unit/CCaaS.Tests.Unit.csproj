@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Simulator/scenarios/*.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Simulator/scenarios/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

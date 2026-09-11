@@ -15,6 +15,15 @@ public class BookingPhrasesTests
     private static readonly EnglishBookingPhrases Say = EnglishBookingPhrases.Instance;
     private static readonly DateOnly Today = new(2026, 9, 16);   // Wednesday
 
+    private static DateOnly D(string iso) =>
+        DateOnly.ParseExact(iso, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static OfferedSlot Slot(string localIso)
+    {
+        var local = DateTime.ParseExact(localIso, "yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
+        return new OfferedSlot(Guid.NewGuid(), local, local.AddHours(-6), "Provider A");
+    }
+
     [Theory]
     [InlineData(16, 0, "four o'clock in the afternoon")]
     [InlineData(16, 15, "quarter past four in the afternoon")]
@@ -59,6 +68,47 @@ public class BookingPhrasesTests
         // "Tomorrow" lands; "the seventeenth" has to be worked out. Within the coming week the
         // weekday alone is unambiguous, and only beyond that is the month worth the breath.
         Assert.Equal(expected, Say.SpeakDate(DateOnly.ParseExact(iso, "yyyy-MM-dd", CultureInfo.InvariantCulture), Today));
+    }
+
+    [Theory]
+    [InlineData("2026-09-17", "What time tomorrow?")]
+    [InlineData("2026-09-16", "What time today?")]
+    [InlineData("2026-09-21", "What time on Monday the twenty first?")]
+    public void AskWhatTime_PutsThePrepositionWhereEnglishWantsIt(string iso, string expected)
+    {
+        // "What time on tomorrow?" is the kind of small wrongness that makes a caller notice
+        // they are talking to a machine. A relative day takes no preposition; a named one does.
+        Assert.Equal(expected, Say.AskWhatTime(D(iso), Today));
+    }
+
+    [Theory]
+    [InlineData("2026-09-16", "nothing free today")]
+    [InlineData("2026-09-17", "nothing free tomorrow")]
+    [InlineData("2026-09-21", "nothing free on Monday the twenty first")]
+    public void NothingFree_ReadsAsASentence(string iso, string expected)
+    {
+        Assert.Contains(expected, Say.NothingFreeThatDay(D(iso), Today));
+    }
+
+    [Fact]
+    public void OfferTimes_OpensWithTheDayInTheRightShape()
+    {
+        // Two slots on the same day: the day is said once, up front, then the times.
+        var slots = new[] { Slot("2026-09-17T09:30:00"), Slot("2026-09-17T11:00:00") };
+
+        var line = Say.OfferTimes(slots, Today);
+
+        Assert.StartsWith("Tomorrow I have", line);
+        Assert.Contains("half past nine in the morning", line);
+        Assert.Contains("eleven o'clock in the morning", line);
+    }
+
+    [Fact]
+    public void OfferTimes_OnANamedDay_KeepsThePreposition()
+    {
+        var slots = new[] { Slot("2026-09-21T09:30:00"), Slot("2026-09-21T11:00:00") };
+
+        Assert.StartsWith("On Monday the twenty first I have", Say.OfferTimes(slots, Today));
     }
 
     [Theory]

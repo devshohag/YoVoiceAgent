@@ -55,7 +55,7 @@ public sealed class EnglishBookingPhrases : IBookingPhrases
         "Which day would you like to come in?";
 
     public string AskWhatTime(DateOnly date, DateOnly today) =>
-        $"What time on {SpeakDate(date, today)}?";
+        $"What time {SpeakDateWithPreposition(date, today)}?";
 
     public string AskMorningOrEvening(int hour12) =>
         $"Just to be sure - {SpeakHourWord(hour12)} in the morning, or {SpeakHourWord(hour12)} in the evening?";
@@ -64,7 +64,7 @@ public sealed class EnglishBookingPhrases : IBookingPhrases
         "That time has already gone by. Which day would you like instead?";
 
     public string NothingFreeThatDay(DateOnly date, DateOnly today) =>
-        $"I'm sorry, there's nothing free on {SpeakDate(date, today)}. Would another day work?";
+        $"I'm sorry, there's nothing free {SpeakDateWithPreposition(date, today)}. Would another day work?";
 
     public string OfferAlternatives(IReadOnlyList<OfferedSlot> slots, DateOnly today)
     {
@@ -97,8 +97,8 @@ public sealed class EnglishBookingPhrases : IBookingPhrases
 
         var options = slots.Select(s => SpeakTime(TimeOnly.FromDateTime(s.StartsAtLocal))).ToList();
         var joined = string.Join(", or ", options);
-        return $"On {SpeakDate(DateOnly.FromDateTime(slots[0].StartsAtLocal), today)} I have {joined}. "
-             + "Which suits you?";
+        var when = SpeakDateWithPreposition(DateOnly.FromDateTime(slots[0].StartsAtLocal), today);
+        return $"{Capitalise(when)} I have {joined}. Which suits you?";
     }
 
     public string AskName() =>
@@ -160,6 +160,21 @@ public sealed class EnglishBookingPhrases : IBookingPhrases
         var month = CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(date.Month);
         return $"{weekday} the {day} of {month}";
     }
+
+    /// <summary>
+    /// The date with whatever preposition a sentence needs around it. "Tomorrow" takes none;
+    /// a named day takes "on". Without this the agent says "What time on tomorrow?" and
+    /// "there's nothing free on today" - phrasings no person has ever used, and the kind of
+    /// small wrongness that makes a caller notice they are talking to a machine.
+    /// </summary>
+    public string SpeakDateWithPreposition(DateOnly date, DateOnly today)
+    {
+        var spoken = SpeakDate(date, today);
+        return spoken is "today" or "tomorrow" ? spoken : $"on {spoken}";
+    }
+
+    private static string Capitalise(string text) =>
+        text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
     /// <summary>"tomorrow at half past four in the afternoon".</summary>
     public string SpeakDateTime(DateTime local, DateOnly today) =>

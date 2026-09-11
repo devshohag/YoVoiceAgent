@@ -1,5 +1,5 @@
 {
-  "name": "04-nearest-alternatives",
+  "name": "05-single-alternative",
   "nowLocal": "2026-09-16T10:00:00",
   "contact": "+8801712345678",
   "steps": [
@@ -15,7 +15,10 @@
         "time": "16:00",
         "waiting": true
       },
-      "text": "tomorrow at four"
+      "text": "tomorrow at four",
+      "says": [
+        "Let me check that for you."
+      ]
     },
     {
       "kind": "availability",
@@ -23,32 +26,17 @@
       "actions": [
         "Speak"
       ],
-      "expect": {
-        "offered": [
-          "17150000-0000-0000-0000-000000000000",
-          "17170000-0000-0000-0000-000000000000"
-        ],
-        "selected": null
-      },
+      "expect": {},
       "slots": [
         {
           "slotId": "17170000-0000-0000-0000-000000000000",
           "startsAtLocal": "2026-09-17T17:00:00",
           "startsAtUtc": "2026-09-17T11:00:00Z",
           "providerName": "Provider A"
-        },
-        {
-          "slotId": "17150000-0000-0000-0000-000000000000",
-          "startsAtLocal": "2026-09-17T15:00:00",
-          "startsAtUtc": "2026-09-17T09:00:00Z",
-          "providerName": "Provider A"
-        },
-        {
-          "slotId": "17110000-0000-0000-0000-000000000000",
-          "startsAtLocal": "2026-09-17T11:00:00",
-          "startsAtUtc": "2026-09-17T05:00:00Z",
-          "providerName": "Provider A"
         }
+      ],
+      "says": [
+        "That time is taken, but I have tomorrow at five o'clock in the evening. Would that work?"
       ]
     },
     {
@@ -57,10 +45,11 @@
       "actions": [
         "Speak"
       ],
-      "expect": {
-        "selected": "17150000-0000-0000-0000-000000000000"
-      },
-      "text": "the three o'clock one"
+      "expect": {},
+      "text": "yes that works",
+      "says": [
+        "And what name should I put the appointment under?"
+      ]
     },
     {
       "kind": "say",
@@ -72,21 +61,27 @@
         "name": "Rahim Uddin",
         "reference": null
       },
-      "text": "Rahim Uddin"
+      "text": "Rahim Uddin",
+      "says": [
+        "So that's tomorrow at five o'clock in the evening for Rahim Uddin. Shall I book it?"
+      ]
     },
     {
       "kind": "say",
       "stage": "Booking",
       "actions": [
         "Speak",
-        "Commit:17150000-0000-0000-0000-000000000000:Rahim Uddin:+8801712345678"
+        "Commit:17170000-0000-0000-0000-000000000000:Rahim Uddin:+8801712345678"
       ],
       "expect": {
         "waiting": true,
         "reference": null,
-        "selected": "17150000-0000-0000-0000-000000000000"
+        "selected": "17170000-0000-0000-0000-000000000000"
       },
-      "text": "yes"
+      "text": "yes",
+      "says": [
+        "Booking that now."
+      ]
     },
     {
       "kind": "committed",
@@ -99,7 +94,10 @@
         "reference": "APT-SIM-001",
         "terminal": true
       },
-      "reference": "APT-SIM-001"
+      "reference": "APT-SIM-001",
+      "says": [
+        "You're booked for tomorrow at five o'clock in the evening. Your reference is zero zero one. You'll get a text message with the details. Thanks for choosing us."
+      ]
     }
   ]
 }

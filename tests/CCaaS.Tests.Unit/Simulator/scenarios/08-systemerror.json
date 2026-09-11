@@ -1,5 +1,5 @@
 {
-  "name": "20-handoff-at-readback",
+  "name": "08-systemerror",
   "nowLocal": "2026-09-16T10:00:00",
   "contact": "+8801712345678",
   "steps": [
@@ -15,7 +15,10 @@
         "time": "16:00",
         "waiting": true
       },
-      "text": "tomorrow at four"
+      "text": "tomorrow at four",
+      "says": [
+        "Let me check that for you."
+      ]
     },
     {
       "kind": "availability",
@@ -34,6 +37,9 @@
           "startsAtUtc": "2026-09-17T10:00:00Z",
           "providerName": "Provider A"
         }
+      ],
+      "says": [
+        "And what name should I put the appointment under?"
       ]
     },
     {
@@ -46,20 +52,43 @@
         "name": "Rahim Uddin",
         "reference": null
       },
-      "text": "Rahim Uddin"
+      "text": "Rahim Uddin",
+      "says": [
+        "So that's tomorrow at four o'clock in the afternoon for Rahim Uddin. Shall I book it?"
+      ]
     },
     {
       "kind": "say",
+      "stage": "Booking",
+      "actions": [
+        "Speak",
+        "Commit:17160000-0000-0000-0000-000000000000:Rahim Uddin:+8801712345678"
+      ],
+      "expect": {
+        "waiting": true,
+        "reference": null,
+        "selected": "17160000-0000-0000-0000-000000000000"
+      },
+      "text": "yes",
+      "says": [
+        "Booking that now."
+      ]
+    },
+    {
+      "kind": "rejected",
       "stage": "Transferring",
       "actions": [
         "Speak:closing",
-        "Transfer:CallerAsked"
+        "Transfer:BookingFailed"
       ],
       "expect": {
-        "handoff": "CallerAsked",
-        "terminal": true
+        "reference": null,
+        "handoff": "BookingFailed"
       },
-      "text": "can I talk to a real person please"
+      "failure": "SystemError",
+      "says": [
+        "I'm having trouble completing that. Let me put you through to a colleague."
+      ]
     }
   ]
 }
