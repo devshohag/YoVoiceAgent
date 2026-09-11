@@ -189,8 +189,17 @@ END");
         Assert.Equal(BookingOutcome.AlreadyYours, (await new AppointmentService(migrated).TryBookAsync(seed.Tenant, Command(seed.First))).Outcome);
         foreach (var command in generator.Generate(migration.DownOperations))
             await migrated.Database.ExecuteSqlRawAsync(command.CommandText);
-        baseline.ChangeTracker.Clear();
-        Assert.Equal(2, await baseline.AppointmentBookings.IgnoreQueryFilters().CountAsync(x => x.TenantId == seed.Tenant));
+        // Verify persisted rows directly after the schema rollback.
+        var remainingBookings = await migrated.Database
+            .SqlQuery<int>($"""
+                    SELECT COUNT(*) AS [Value]
+                    FROM [appointment].[AppointmentBooking]
+                    WHERE [TenantId] = {seed.Tenant}
+                    """
+            )
+            .SingleAsync();
+
+        Assert.Equal(2, remainingBookings);
     }
 
     private async Task<BookingAttempt[]> Race(SeedData seed, string[] contacts)
