@@ -1,0 +1,32 @@
+{
+  "name": "19-call-length-limit",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "expect": {},
+      "text": "tomorrow"
+    },
+    {
+      "kind": "say",
+      "stage": "Transferring",
+      "actions": [
+        "Speak:closing",
+        "Transfer:CallLengthExceeded"
+      ],
+      "expect": {
+        "handoff": "CallLengthExceeded",
+        "callerTurns": 2
+      },
+      "text": "at four"
+    }
+  ],
+  "policy": {
+    "maxTurns": 1
+  }
+}

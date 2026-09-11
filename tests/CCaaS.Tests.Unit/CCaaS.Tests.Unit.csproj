@@ -28,4 +28,8 @@
     <ProjectReference Include="..\..\src\CCaaS.Infrastructure\CCaaS.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Simulator/scenarios/*.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

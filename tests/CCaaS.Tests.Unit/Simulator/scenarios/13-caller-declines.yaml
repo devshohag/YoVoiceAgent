@@ -1,0 +1,20 @@
+{
+  "name": "13-caller-declines",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "Ended",
+      "actions": [
+        "Speak:closing",
+        "End:caller declined"
+      ],
+      "expect": {
+        "terminal": true,
+        "reference": null
+      },
+      "text": "not interested"
+    }
+  ]
+}
