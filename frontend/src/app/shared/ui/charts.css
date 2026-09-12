@@ -1,0 +1,81 @@
+.chart-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.chart-panel__title,
+.chart-panel__subtitle { margin: 0; }
+.chart-panel__title { font-size: var(--text-md); font-weight: 700; }
+.chart-panel__subtitle { color: var(--text-muted); font-size: var(--text-xs); }
+
+.latency-chart {
+  display: block;
+  width: 100%;
+  height: var(--chart-height);
+  overflow: visible;
+}
+
+.latency-chart__grid { stroke: var(--border); stroke-width: 1; }
+.latency-chart__axis { fill: var(--text-faint); font: var(--text-xs) var(--font-mono); }
+.latency-chart__concurrency { fill: var(--chart-concurrency); opacity: 0.16; }
+.latency-chart__line--p50 { fill: none; stroke: var(--chart-seq-3); stroke-width: 2; }
+.latency-chart__line--p95 { fill: none; stroke: var(--chart-seq-6); stroke-width: 4; }
+.latency-chart__dot--p50 { fill: var(--chart-seq-3); }
+.latency-chart__dot--p95 { fill: var(--chart-seq-6); }
+
+.stage-breakdown {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.stage-breakdown__row {
+  display: grid;
+  grid-template-columns: var(--chart-label-width) 1fr;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stage-breakdown__label { color: var(--text-muted); font-size: var(--text-xs); }
+.stage-breakdown__bar {
+  display: flex;
+  height: var(--chart-stage-height);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.stage-breakdown__segment {
+  display: grid;
+  min-width: 0;
+  color: var(--text);
+  place-items: center;
+  font-size: var(--text-2xs);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.stage-breakdown__segment--stt { background: var(--chart-seq-1); }
+.stage-breakdown__segment--endpoint { background: var(--chart-seq-2); }
+.stage-breakdown__segment--routing { background: var(--chart-seq-3); }
+.stage-breakdown__segment--llm { background: var(--chart-seq-4); }
+.stage-breakdown__segment--tts { background: var(--chart-seq-5); }
+.stage-breakdown__segment--rtp { background: var(--chart-seq-6); }
+
+.chart-empty-state,
+.chart-nodata-state {
+  display: grid;
+  min-height: var(--state-min-height);
+  gap: var(--space-2);
+  padding: var(--space-4);
+  color: var(--text-muted);
+  text-align: center;
+  place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+.chart-empty-state__title,
+.chart-nodata-state__title { color: var(--text); font-weight: 700; }
