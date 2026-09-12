@@ -66,6 +66,9 @@
   --z-sticky-header: 2;
   --z-sticky-cell: 3;
   --z-sticky-corner: 4;
+  --chart-height: 220px;
+  --chart-stage-height: 22px;
+  --chart-label-width: 96px;
 }
 
 :root[data-theme="dark"] {

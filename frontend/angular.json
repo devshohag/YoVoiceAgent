@@ -36,6 +36,7 @@
               "src/styles/a11y.css",
               "src/app/shared/ui/core-components.css",
               "src/app/shared/ui/data-display.css",
+              "src/app/shared/ui/charts.css",
               "src/styles.scss"
             ]
           },
