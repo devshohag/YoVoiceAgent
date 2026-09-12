@@ -1,0 +1,108 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
+  transition: color var(--motion-instant) var(--ease),
+    background-color var(--motion-instant) var(--ease),
+    border-color var(--motion-instant) var(--ease),
+    box-shadow var(--motion-instant) var(--ease);
+}
+
+:lang(bn), .bn {
+  font-size: 0.94em;
+  line-height: 1.8;
+}
+
+:lang(en) {
+  line-height: 1.5;
+}
+
+.mono, time, [data-numeric="true"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.placeholder-page {
+  max-width: 480px;
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.placeholder-page code {
+  padding: 0.1rem 0.3rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+}
+
+.placeholder-page .note {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.provision-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.provision-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.provision-form input,
+.provision-form select {
+  padding: var(--space-2);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.provision-form button {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-4);
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.provision-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
