@@ -1,0 +1,73 @@
+{
+  "name": "26-repeat-does-not-spend-patience",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "ChoosingIntent",
+      "actions": [
+        "Speak"
+      ],
+      "text": "say that again",
+      "says": [
+        "book, cancel, or reschedule"
+      ],
+      "expect": {
+        "noProgress": 0
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak",
+        "Speak"
+      ],
+      "text": "mmm",
+      "expect": {
+        "noProgress": 1
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "text": "can you repeat that",
+      "says": [
+        "Which day"
+      ],
+      "expect": {
+        "noProgress": 1
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "text": "sorry what",
+      "says": [
+        "Which day"
+      ],
+      "expect": {
+        "noProgress": 1
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:16:00:None"
+      ],
+      "text": "tomorrow at four",
+      "expect": {
+        "noProgress": 0
+      }
+    }
+  ]
+}

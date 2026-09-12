@@ -1,0 +1,79 @@
+{
+  "name": "33-handoff-during-cancellation",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "LookingUpAppointments",
+      "actions": [
+        "Speak",
+        "FindAppointments:+8801712345678"
+      ],
+      "text": "cancel my appointment",
+      "expect": {
+        "intent": "Cancel",
+        "waiting": true
+      }
+    },
+    {
+      "kind": "appointments",
+      "stage": "ConfirmingCancellation",
+      "actions": [
+        "Speak"
+      ],
+      "appointments": [
+        {
+          "bookingId": "26000000-0000-0000-0000-000000000001",
+          "slot": {
+            "slotId": "26000000-0000-0000-0000-000000000002",
+            "startsAtLocal": "2026-09-18T10:00:00",
+            "startsAtUtc": "2026-09-18T04:00:00Z",
+            "providerName": "Provider A"
+          },
+          "callerName": "Rahim",
+          "contact": "+8801712345678"
+        }
+      ],
+      "says": [
+        "number ending seven eight"
+      ],
+      "expect": {
+        "existing": "26000000-0000-0000-0000-000000000001"
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CancellingAppointment",
+      "actions": [
+        "Speak",
+        "Cancel:26000000-0000-0000-0000-000000000001"
+      ],
+      "text": "yes",
+      "expect": {
+        "cancellationConfirmed": false
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CancellingAppointment",
+      "actions": [],
+      "text": "human please",
+      "expect": {
+        "handoffPending": true
+      }
+    },
+    {
+      "kind": "cancelled",
+      "stage": "Transferring",
+      "actions": [
+        "Speak:closing",
+        "Transfer:CallerAsked"
+      ],
+      "expect": {
+        "cancellationConfirmed": true,
+        "handoffPending": false
+      }
+    }
+  ]
+}

@@ -31,6 +31,9 @@ public sealed class AppointmentBooking : BaseEntity
     public AppointmentBookingStatus Status { get; set; } = AppointmentBookingStatus.Confirmed;
     public DateTime ConfirmedAtUtc { get; set; } = DateTime.UtcNow;
     public string IdempotencyKey { get; set; } = default!;
+    public DateTime? CancelledAtUtc { get; set; }
+    public string? CancellationReason { get; set; }
+    public Guid? RescheduledFromBookingId { get; set; }
 }
 
 public enum AppointmentSlotStatus { Available, Reserved, Booked, Blocked }

@@ -25,12 +25,24 @@ public static class BookingOutcomeMapping
     };
 }
 
+public enum AppointmentChangeOutcome
+{
+    Cancelled, AlreadyCancelled, Rescheduled, AlreadyRescheduled,
+    NotFound, NotChangeable, SlotTaken, ProviderUnavailable, InvalidDetails, Conflict, SystemError
+}
+
+public sealed record AppointmentChangeResult(AppointmentChangeOutcome Outcome,
+    Guid? BookingId = null, string? BookingReference = null, DateTime? StartsAtUtc = null);
+
 public interface IAppointmentService
 {
     Task<IReadOnlyList<AvailableAppointmentSlot>> GetAvailabilityAsync(Guid tenantId, DateOnly date, CancellationToken ct = default);
     Task<IReadOnlyList<AvailableAppointmentSlot>> GetAvailabilityAsync(Guid tenantId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
     Task<BookingAttempt> TryBookAsync(Guid tenantId, BookAppointmentCommand command, CancellationToken ct = default);
     Task<AppointmentBookingResult> BookAsync(Guid tenantId, BookAppointmentCommand command, CancellationToken ct = default);
+    Task<IReadOnlyList<AppointmentVoucherData>> FindUpcomingAsync(Guid tenantId, string contact, DateTime fromUtc, CancellationToken ct = default);
+    Task<AppointmentChangeResult> CancelAsync(Guid tenantId, Guid bookingId, string reason, CancellationToken ct = default);
+    Task<AppointmentChangeResult> RescheduleAsync(Guid tenantId, Guid bookingId, Guid newSlotId, CancellationToken ct = default);
     Task<IReadOnlyList<AppointmentBooking>> GetBookingsAsync(Guid tenantId, CancellationToken ct = default);
     Task<AppointmentVoucherData?> GetVoucherAsync(Guid tenantId, Guid bookingId, CancellationToken ct = default);
 }

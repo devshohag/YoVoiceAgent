@@ -24,7 +24,10 @@ public enum CallerMove
     WantsHuman,
 
     /// <summary>"Forget it", "I'll call back", "not interested", "stop calling".</summary>
-    WantsToEnd
+    WantsToEnd,
+    Repeat,
+    CancelAppointment,
+    RescheduleAppointment
 }
 
 /// <summary>
@@ -81,6 +84,12 @@ public static class CallerIntent
         var text = Flatten(utterance);
 
         if (WantsHuman.IsMatch(text)) return CallerMove.WantsHuman;
+        if (Regex.IsMatch(text, @"\b(?:reschedule|move my appointment|change my appointment)\b", Opts))
+            return CallerMove.RescheduleAppointment;
+        if (Regex.IsMatch(text, @"\bcancel (?:my |the |an |existing )?(?:appointment|booking)\b", Opts))
+            return CallerMove.CancelAppointment;
+        if (Regex.IsMatch(text, @"\b(?:say that again|repeat(?: that| it)?|sorry what|pardon|come again)\b", Opts))
+            return CallerMove.Repeat;
         if (WantsToEnd.IsMatch(text)) return CallerMove.WantsToEnd;
         if (Unsure.IsMatch(text)) return CallerMove.Unsure;
 

@@ -14,6 +14,10 @@ namespace CCaaS.Domain.Scheduling.Booking;
 public interface IBookingPhrases
 {
     string AskWhen();
+    string AskIntent() => "Would you like to book, cancel, or reschedule an appointment?";
+    string DescribeAppointment(OfferedSlot slot, string callerName, DateOnly today) =>
+        EnglishBookingPhrases.Instance.DescribeAppointment(slot, callerName, today);
+    string ContactReadback(string contact) => EnglishBookingPhrases.SpeakContactSuffix(contact);
     string AskWhichDay();
     string AskUnambiguousDate() => AskWhichDay();
     string AskWhatTime(DateOnly date, DateOnly today);
@@ -48,6 +52,16 @@ public sealed class EnglishBookingPhrases : IBookingPhrases
 
     public EnglishBookingPhrases(string businessName = "us")
         => _businessName = businessName;
+
+    public static string SpeakContactSuffix(string contact)
+    {
+        if (string.IsNullOrWhiteSpace(contact) || contact.Contains('@'))
+            return "Is the contact we have on file correct?";
+        var digits = contact.Where(c => c is >= '0' and <= '9').ToArray();
+        if (digits.Length < 2) return "Is the contact we have on file correct?";
+        string[] words = { "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
+        return $"Is the number ending {words[digits[^2] - '0']} {words[digits[^1] - '0']} correct?";
+    }
 
     public string AskWhen() =>
         "What day and time would suit you?";
@@ -107,6 +121,9 @@ public sealed class EnglishBookingPhrases : IBookingPhrases
 
     public string AskName() =>
         "And what name should I put the appointment under?";
+
+    public string DescribeAppointment(OfferedSlot slot, string callerName, DateOnly today) =>
+        $"Your appointment is {SpeakDateTime(slot.StartsAtLocal, today)} for {callerName}.";
 
     public string ReadBackForConfirmation(OfferedSlot slot, string callerName, DateOnly today) =>
         $"So that's {SpeakDateTime(slot.StartsAtLocal, today)} for {callerName}. Shall I book it?";

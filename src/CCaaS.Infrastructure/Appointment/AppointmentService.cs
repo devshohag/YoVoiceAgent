@@ -10,7 +10,7 @@ using System.Net.Mail;
 
 namespace CCaaS.Infrastructure.Appointment;
 
-internal sealed class AppointmentService : IAppointmentService
+internal sealed partial class AppointmentService : IAppointmentService
 {
     private readonly CcaasDbContext _db;
 
@@ -88,7 +88,8 @@ internal sealed class AppointmentService : IAppointmentService
             if (!contact.Ok) return Failure(BookingOutcome.InvalidDetails, contact.Error!);
             key = BookingIdempotency.Derive(tenantId, command.SlotId, contact.Value!);
             var existing = await FindExistingAsync(tenantId, key, ct);
-            if (existing is not null) return existing;
+            if (existing is not null) return existing.Status == AppointmentBookingStatus.Confirmed.ToString()
+                ? existing : Failure(BookingOutcome.InvalidDetails, "That previous booking is no longer active.");
 
             slot = await FindTenantSlotAsync(tenantId, command.SlotId, ct);
             if (slot is null) return Failure(BookingOutcome.SlotTaken, "Appointment slot was not found.");
@@ -138,8 +139,11 @@ internal sealed class AppointmentService : IAppointmentService
     {
         try
         {
-            return await FindExistingAsync(tenantId, key, ct)
-                ?? Failure(BookingOutcome.SlotTaken, "That appointment slot was just booked. Please choose another time.");
+            var existing = await FindExistingAsync(tenantId, key, ct);
+            if (existing is not null)
+                return existing.Status == AppointmentBookingStatus.Confirmed.ToString() ? existing
+                    : Failure(BookingOutcome.InvalidDetails, "That previous booking is no longer active.");
+            return Failure(BookingOutcome.SlotTaken, "That appointment slot was just booked. Please choose another time.");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
