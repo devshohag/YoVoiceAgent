@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using CCaaS.Application.Calls;
+using CCaaS.Domain.Calls;
 using CCaaS.Application.Crm;
 using CCaaS.Infrastructure.ObjectStorage;
 using CCaaS.Infrastructure.Persistence;
@@ -350,6 +351,13 @@ public sealed class AriEventListener : BackgroundService
             var saved = await calls.AddRecordingAsync(context.TenantId, context.CallSessionId,
                 objectKey, duration, file.Length, ct);
             await calls.RecordEventAsync(context.TenantId, context.CallSessionId,
+                "CallerSpeechEnded", JsonSerializer.Serialize(new
+                {
+                    recordingId = saved.Id,
+                    occurredAtUtc = DateTime.UtcNow,
+                    audioDurationMs = duration * 1000
+                }), ct);
+            await calls.RecordEventAsync(context.TenantId, context.CallSessionId,
                 "RecordingReady", JsonSerializer.Serialize(new { recordingId = saved.Id, objectKey, ariEvent = json }), ct);
             await calls.RecordEventAsync(context.TenantId, context.CallSessionId,
                 "AwaitingVoiceBridge", JsonSerializer.Serialize(new { recordingId = saved.Id }), ct);
@@ -386,6 +394,48 @@ public sealed class AriEventListener : BackgroundService
             context.TenantId, context.CallSessionId, "VoiceResponsePlaybackStarted",
             JsonSerializer.Serialize(new { responseName, objectKey, playbackId }), ct);
         return true;
+    }
+
+    /// <summary>
+    /// Records caller-heard TTFA only when the audio transport supplies the timestamp of the
+    /// first RTP frame heard by the caller. Playback acceptance is intentionally not used here.
+    /// </summary>
+    public async Task RecordCallerHeardFirstAudioAsync(Guid callSessionId,
+        DateTime firstAudioFrameAtUtc, CancellationToken ct = default)
+    {
+        var context = _callsByChannel.Values.FirstOrDefault(x => x.CallSessionId == callSessionId);
+        if (context is null) return;
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CcaasDbContext>();
+        var speechEnd = await db.CallEvents.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.TenantId == context.TenantId && x.CallSessionId == callSessionId
+                && !x.IsDeleted && x.EventType == "CallerSpeechEnded")
+            .OrderByDescending(x => x.OccurredAt)
+            .Select(x => x.OccurredAt)
+            .FirstOrDefaultAsync(ct);
+        if (speechEnd == default || firstAudioFrameAtUtc < speechEnd) return;
+
+        db.CallStageTimings.Add(new CallStageTiming
+        {
+            TenantId = context.TenantId,
+            CallSessionId = callSessionId,
+            TurnNo = context.Turn,
+            Stage = CallStageTiming.TimeToFirstAudioStage,
+            StartedAt = speechEnd,
+            EndedAt = firstAudioFrameAtUtc,
+            DurationMs = (firstAudioFrameAtUtc - speechEnd).TotalMilliseconds,
+            Outcome = "success",
+            Concurrency = _callsByChannel.Count,
+            Provider = "asterisk-rtp",
+            PipelineVersion = "batch-v1",
+            MetadataJson = JsonSerializer.Serialize(new
+            {
+                measurement = "caller-heard-first-rtp-frame",
+                firstAudioFrameAtUtc
+            })
+        });
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<bool> HangupCallAsync(Guid callSessionId, CancellationToken ct)
