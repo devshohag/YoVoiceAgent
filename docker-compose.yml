@@ -109,6 +109,8 @@ services:
       WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
       WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
       SPEECH_NUM_PARALLEL: ${LOCAL_AI_SPEECH_PARALLEL:-2}
+      VAD_SILENCE_THRESHOLD: ${VAD_SILENCE_THRESHOLD:-500}
+      VAD_PADDING_MS: ${VAD_PADDING_MS:-80}
     volumes:
       - local-ai-models:/models
     ports:
