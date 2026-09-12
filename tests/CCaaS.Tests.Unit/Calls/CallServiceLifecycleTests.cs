@@ -55,6 +55,59 @@ public class CallServiceLifecycleTests
     }
 
     [Fact]
+    public void Campaign_call_key_is_stable_scoped_and_attempt_specific()
+    {
+        var tenant = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var campaign = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var contact = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var key = CallIdempotency.Derive(tenant, campaign, contact, 1);
+
+        Assert.Equal(64, key.Length);
+        Assert.Equal(key, CallIdempotency.Derive(tenant, campaign, contact, 1));
+        Assert.NotEqual(key, CallIdempotency.Derive(tenant, campaign, contact, 2));
+        Assert.NotEqual(key, CallIdempotency.Derive(tenant, campaign, Guid.NewGuid(), 1));
+    }
+
+    [Fact]
+    public async Task Retried_campaign_dial_returns_one_session_and_dispatches_once()
+    {
+        var sessions = new FakeRepository<CallSession>();
+        var dispatcher = new RecordingDispatcher();
+        var service = Create(sessions, new FakeRepository<CallEvent>(), dispatcher);
+        var tenant = Guid.NewGuid();
+        var request = new InitiateOutboundCallRequest(Guid.NewGuid(), "1001", "+14155552671",
+            null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1);
+
+        var first = await service.InitiateOutboundCallAsync(tenant, request);
+        var retry = await service.InitiateOutboundCallAsync(tenant, request);
+
+        Assert.Same(first, retry);
+        Assert.Single(sessions.Items);
+        Assert.Equal(1, dispatcher.Count);
+        Assert.Equal(request.CampaignLeadId, first.CampaignLeadId);
+        Assert.Equal(CallIdempotency.Derive(tenant, request.CampaignId!.Value,
+            request.LeadId!.Value, request.AttemptNumber!.Value), first.IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task New_campaign_attempt_gets_a_new_session()
+    {
+        var sessions = new FakeRepository<CallSession>();
+        var dispatcher = new RecordingDispatcher();
+        var service = Create(sessions, new FakeRepository<CallEvent>(), dispatcher);
+        var tenant = Guid.NewGuid();
+        var firstAttempt = new InitiateOutboundCallRequest(Guid.NewGuid(), "1001", "+14155552671",
+            null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1);
+
+        await service.InitiateOutboundCallAsync(tenant, firstAttempt);
+        await service.InitiateOutboundCallAsync(tenant, firstAttempt with { AttemptNumber = 2 });
+
+        Assert.Equal(2, sessions.Items.Count);
+        Assert.Equal(2, dispatcher.Count);
+        Assert.NotEqual(sessions.Items[0].IdempotencyKey, sessions.Items[1].IdempotencyKey);
+    }
+
+    [Fact]
     public async Task Failed_handoff_remains_failed_when_channel_is_destroyed()
     {
         var sessions = new FakeRepository<CallSession>();
@@ -67,9 +120,22 @@ public class CallServiceLifecycleTests
         Assert.NotNull(session.EndedAt);
     }
 
-    private static CallService Create(FakeRepository<CallSession> sessions, FakeRepository<CallEvent> events) =>
-        new(sessions, events, new FakeRepository<Recording>(), new FakeUnitOfWork(), new NoopDispatcher());
+    private static CallService Create(FakeRepository<CallSession> sessions, FakeRepository<CallEvent> events,
+        ITelephonyDispatcher? dispatcher = null) =>
+        new(sessions, events, new FakeRepository<Recording>(), new FakeUnitOfWork(), dispatcher ?? new NoopDispatcher());
 
     private sealed class NoopDispatcher : ITelephonyDispatcher
     { public Task OriginateCallAsync(Guid callSessionId, string fromNumber, string toNumber, CancellationToken ct = default) => Task.CompletedTask; }
+
+    private sealed class RecordingDispatcher : ITelephonyDispatcher
+    {
+        public int Count { get; private set; }
+
+        public Task OriginateCallAsync(Guid callSessionId, string fromNumber, string toNumber,
+            CancellationToken ct = default)
+        {
+            Count++;
+            return Task.CompletedTask;
+        }
+    }
 }

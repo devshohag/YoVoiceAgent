@@ -127,17 +127,20 @@ internal sealed class BookAppointmentTool : IAiToolHandler
         if (input.SlotId is null || input.SlotId == Guid.Empty) throw new ArgumentException("Availability slot id is required.");
         if (string.IsNullOrWhiteSpace(input.CustomerName)) throw new ArgumentException("Customer name is required.");
         if (string.IsNullOrWhiteSpace(input.Contact)) throw new ArgumentException("Customer contact is required.");
-        var booking = await _appointments.BookAsync(tenantId, new BookAppointmentCommand(
+        var booking = await _appointments.TryBookAsync(tenantId, new BookAppointmentCommand(
             input.SlotId.Value, input.CustomerName, input.Contact, input.Purpose), ct);
+        var success = booking.Outcome is BookingOutcome.Booked or BookingOutcome.AlreadyYours;
         return System.Text.Json.JsonSerializer.Serialize(new
         {
-            success = true,
+            success,
+            outcome = booking.Outcome.ToString(),
             bookingId = booking.BookingId,
             bookingReference = booking.BookingReference,
             startsAtUtc = booking.StartsAtUtc,
             status = booking.Status,
-            wasExisting = booking.WasExisting,
-            voucherUrl = $"/api/appointments/{booking.BookingId}/voucher",
+            wasExisting = booking.Outcome == BookingOutcome.AlreadyYours,
+            error = booking.Error,
+            voucherUrl = success ? $"/api/appointments/{booking.BookingId}/voucher" : null,
             source = "sql-server"
         });
     }
