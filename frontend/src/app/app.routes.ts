@@ -10,6 +10,10 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'agent-workspace', pathMatch: 'full' },
       {
+        path: 'design',
+        loadComponent: () => import('./features/design-qa/design-qa').then(m => m.DesignQa)
+      },
+      {
         path: 'agent-workspace',
         loadComponent: () => import('./features/agent-workspace/agent-workspace').then(m => m.AgentWorkspace)
       },

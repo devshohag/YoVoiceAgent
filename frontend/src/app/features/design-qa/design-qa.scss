@@ -1,0 +1,14 @@
+.design-page { max-width: 1440px; margin: 0 auto; padding: var(--space-6); color: var(--text); }
+.design-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); margin-bottom: var(--space-7); }
+.design-header h1, .design-header p { margin: 0; }
+.design-header h1 { font-size: var(--text-3xl); }
+.eyebrow { color: var(--text-muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.08em; }
+.design-controls { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.design-controls span { color: var(--text-muted); font-size: var(--text-sm); }
+.design-section { margin-bottom: var(--space-7); }
+.design-section h2 { margin: 0 0 var(--space-4); font-size: var(--text-xl); }
+.component-grid, .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.state-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.component-grid h3 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
+.demo-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 760px) { .design-page { padding: var(--space-4); } .design-header, .component-grid, .chart-grid, .state-grid { grid-template-columns: 1fr; flex-direction: column; } }
