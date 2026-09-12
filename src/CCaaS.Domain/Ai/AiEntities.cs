@@ -90,6 +90,16 @@ public class AiUsageRecord : BaseEntity
     public decimal EstimatedCost { get; set; }
 }
 
+public class ProviderUsage : BaseEntity
+{
+    public string Provider { get; set; } = default!;
+    public string Operation { get; set; } = default!;
+    public decimal Units { get; set; }
+    public string UnitType { get; set; } = default!;
+    public long CostMicros { get; set; }
+    public int DurationMilliseconds { get; set; }
+}
+
 public enum AiConversationStatus { Created, Processing, Completed, HandoffRequested, Failed }
 public enum AiSpeaker { Customer, AiAgent, HumanAgent, System }
 public enum AiToolExecutionStatus { Requested, Succeeded, Failed, Rejected }

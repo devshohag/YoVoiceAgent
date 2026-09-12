@@ -8,6 +8,7 @@ namespace CCaaS.Application.Ai;
 // models without changing core domain logic."
 
 public record TranscriptResult(string Text, double? ConfidenceScore);
+public record SpeechSynthesisResult(byte[] Audio, string ContentType, int DurationMilliseconds);
 public record SummaryResult(string Summary, string? SuggestedDisposition, string? SuggestedFollowUp);
 public record HandoffContextResult(
     string Summary,
@@ -25,6 +26,17 @@ public record SentimentResult(string Label, double Score); // e.g. "positive" | 
 public interface ISpeechToTextProvider
 {
     Task<TranscriptResult> TranscribeAsync(string recordingObjectStorageKey, CancellationToken ct = default);
+}
+
+public interface ITextToSpeechProvider
+{
+    Task<SpeechSynthesisResult> SynthesizeAsync(string text, string language = "en-US", CancellationToken ct = default);
+}
+
+public interface IProviderUsageWriter
+{
+    Task RecordAsync(Guid tenantId, string provider, string operation, decimal units,
+        string unitType, long costMicros, int durationMilliseconds, CancellationToken ct = default);
 }
 
 public interface ISummaryProvider

@@ -1,9 +1,11 @@
 import asyncio
+import json
 import os
 import struct
 import subprocess
 import tempfile
 import wave
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 
@@ -23,12 +25,27 @@ parallelism = max(1, int(os.getenv("SPEECH_NUM_PARALLEL", "2")))
 speech_slots = asyncio.Semaphore(parallelism)
 vad_threshold = max(0, int(os.getenv("VAD_SILENCE_THRESHOLD", "500")))
 vad_padding_ms = max(0, int(os.getenv("VAD_PADDING_MS", "80")))
+piper_default_language = os.getenv("PIPER_DEFAULT_LANGUAGE", "en-US")
+piper_output_sample_rate = max(8000, int(os.getenv("PIPER_OUTPUT_SAMPLE_RATE", "8000")))
+piper_warmup = os.getenv("PIPER_WARMUP", "true").lower() in ("1", "true", "yes")
+prompt_cache_dir = Path(os.getenv("PROMPT_CACHE_DIR", "/models/prompt-cache"))
+prompt_manifest_path = Path(os.getenv("PROMPT_MANIFEST", "/models/prompt-cache/manifest.json"))
 
 
 @lru_cache(maxsize=1)
 def whisper_model() -> WhisperModel:
     return WhisperModel(model_name, device=device, compute_type=compute_type,
                         download_root="/models/whisper")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if piper_warmup:
+        await asyncio.to_thread(load_voice, piper_default_language)
+    yield
+
+
+app.router.lifespan_context = lifespan
 
 
 def trim_wav_silence(source_path: str, target_path: str) -> str:
@@ -90,7 +107,10 @@ def load_voice(language: str) -> PiperVoice:
 @app.get("/health")
 async def health():
     return {"status": "healthy", "whisperModel": model_name,
-            "device": device, "parallelism": parallelism}
+            "device": device, "parallelism": parallelism,
+            "piperDefaultLanguage": piper_default_language,
+            "piperOutputSampleRate": piper_output_sample_rate,
+            "piperWarmed": piper_warmup}
 
 
 @app.post("/v1/audio/transcriptions")
@@ -125,8 +145,29 @@ async def transcribe(file: UploadFile = File(...), language: str = Form("auto"))
 
 class SpeechRequest(BaseModel):
     input: str
-    language: str = "bn-BD"
+    language: str | None = None
     voice: str | None = None
+
+
+def prompt_key_is_safe(key: str) -> bool:
+    return bool(key) and all(character.isalnum() or character in "-_" for character in key)
+
+
+@app.get("/v1/audio/prompts/{key}")
+async def cached_prompt(key: str):
+    if not prompt_key_is_safe(key):
+        raise HTTPException(status_code=400, detail="Invalid prompt key")
+    prompt_path = prompt_cache_dir / f"{key}.wav"
+    if not prompt_path.is_file():
+        raise HTTPException(status_code=404, detail="Prompt audio is not cached")
+    return FileResponse(prompt_path, media_type="audio/wav", filename=f"{key}.wav")
+
+
+@app.get("/v1/audio/prompts")
+async def cached_prompts():
+    if not prompt_manifest_path.is_file():
+        return {"prompts": []}
+    return {"prompts": json.loads(prompt_manifest_path.read_text(encoding="utf-8"))}
 
 
 @app.post("/v1/audio/speech")
@@ -139,12 +180,13 @@ async def speech(request: SpeechRequest):
         phone_path = str(Path(work) / "telephone.wav")
         try:
             def synthesize():
-                voice = load_voice(request.language)
+                language = request.language or piper_default_language
+                voice = load_voice(language)
                 with wave.open(native_path, "wb") as output:
                     voice.synthesize_wav(request.input.strip(), output)
                 subprocess.run([
                     "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-i", native_path, "-ar", "8000", "-ac", "1",
+                    "-i", native_path, "-ar", str(piper_output_sample_rate), "-ac", "1",
                     "-c:a", "pcm_s16le", phone_path,
                 ], check=True)
 

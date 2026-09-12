@@ -1,0 +1,8 @@
+[
+  {"key": "greeting", "text": "Hello, how can I help you today?", "language": "en-US"},
+  {"key": "checking-availability", "text": "Let me check that for you.", "language": "en-US"},
+  {"key": "booking-now", "text": "Booking that now.", "language": "en-US"},
+  {"key": "did-not-catch-that", "text": "Sorry, I didn't catch that. Could you say it again?", "language": "en-US"},
+  {"key": "slot-just-taken", "text": "I'm sorry - somebody took that slot just now. Let me find you another.", "language": "en-US"},
+  {"key": "goodbye", "text": "No problem at all. Thanks for your time, and have a good day.", "language": "en-US"}
+]

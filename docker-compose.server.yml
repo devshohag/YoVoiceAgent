@@ -109,6 +109,11 @@ services:
       SPEECH_NUM_PARALLEL: "${LOCAL_AI_SPEECH_PARALLEL:-1}"
       VAD_SILENCE_THRESHOLD: "${VAD_SILENCE_THRESHOLD:-500}"
       VAD_PADDING_MS: "${VAD_PADDING_MS:-80}"
+      PIPER_DEFAULT_LANGUAGE: "${PIPER_DEFAULT_LANGUAGE:-en-US}"
+      PIPER_OUTPUT_SAMPLE_RATE: "${PIPER_OUTPUT_SAMPLE_RATE:-8000}"
+      PIPER_WARMUP: "${PIPER_WARMUP:-true}"
+      PROMPT_CACHE_DIR: "${PROMPT_CACHE_DIR:-/models/prompt-cache}"
+      PROMPT_MANIFEST: "${PROMPT_MANIFEST:-/models/prompt-cache/manifest.json}"
     volumes: [local-ai-models:/models]
     networks: [ccaas-net]
     mem_limit: 2560m
@@ -161,6 +166,7 @@ services:
       AiVoice__MaxConcurrentCalls: "${AI_VOICE_MAX_CONCURRENT_CALLS:-1}"
       AiVoice__Model: "${OLLAMA_MODEL:-qwen3:1.7b}"
       AiVoice__ProviderTimeoutSeconds: "${AI_VOICE_PROVIDER_TIMEOUT_SECONDS:-120}"
+      AiVoice__SpeechTimeoutMilliseconds: "${AI_VOICE_SPEECH_TIMEOUT_MILLISECONDS:-2500}"
       AiVoice__AppointmentTimeZoneId: "${APPOINTMENT_TIME_ZONE_ID:-Asia/Dhaka}"
       Telephony__RecordingMaxDurationSeconds: "${TELEPHONY_RECORDING_MAX_DURATION_SECONDS:-15}"
       Telephony__RecordingMaxSilenceSeconds: "${TELEPHONY_RECORDING_MAX_SILENCE_SECONDS:-2}"

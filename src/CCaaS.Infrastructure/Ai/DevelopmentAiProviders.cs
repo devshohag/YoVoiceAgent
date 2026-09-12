@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 using CCaaS.Application.Ai;
 using CCaaS.Application.Appointment;
+using CCaaS.Shared.Tenancy;
 
 namespace CCaaS.Infrastructure.Ai;
 
@@ -42,6 +44,32 @@ internal sealed class DevelopmentAiProvider :
                        text.Contains("cancel", StringComparison.OrdinalIgnoreCase);
         return Task.FromResult(new SentimentResult(negative ? "negative" : "neutral", negative ? 0.82 : 0.65));
     }
+}
+
+internal sealed class MeteredSpeechToTextProvider : ISpeechToTextProvider
+{
+    private readonly ISpeechToTextProvider _inner;
+    private readonly IProviderUsageWriter _usage;
+    private readonly ICurrentTenant _tenant;
+
+    public MeteredSpeechToTextProvider(ISpeechToTextProvider inner, IProviderUsageWriter usage, ICurrentTenant tenant)
+    {
+        _inner = inner;
+        _usage = usage;
+        _tenant = tenant;
+    }
+
+    public async Task<TranscriptResult> TranscribeAsync(string recordingObjectStorageKey, CancellationToken ct = default)
+    {
+        var started = Stopwatch.GetTimestamp();
+        var result = await _inner.TranscribeAsync(recordingObjectStorageKey, ct);
+        await _usage.RecordAsync(_tenant.TenantId, "development", "speech-to-text",
+            result.Text.Length, "characters", 0, ElapsedMilliseconds(started), ct);
+        return result;
+    }
+
+    private static int ElapsedMilliseconds(long started) =>
+        (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
 }
 
 public sealed partial class PiiTranscriptRedactor : ITranscriptRedactor
