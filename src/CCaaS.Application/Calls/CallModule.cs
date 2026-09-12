@@ -3,7 +3,9 @@ using CCaaS.Domain.Calls;
 
 namespace CCaaS.Application.Calls;
 
-public record InitiateOutboundCallRequest(Guid AgentId, string FromNumber, string ToNumber, Guid? CustomerId, Guid? LeadId, Guid? CampaignId);
+public record InitiateOutboundCallRequest(Guid AgentId, string FromNumber, string ToNumber,
+    Guid? CustomerId, Guid? LeadId, Guid? CampaignId, Guid? CampaignLeadId = null,
+    int? AttemptNumber = null);
 
 public static class CallLifecycleClassifier
 {
@@ -92,6 +94,25 @@ public class CallService : ICallService
 
     public async Task<CallSession> InitiateOutboundCallAsync(Guid tenantId, InitiateOutboundCallRequest request, CancellationToken ct = default)
     {
+        string? idempotencyKey = null;
+        if (request.CampaignId is not null)
+        {
+            if (request.CampaignId == Guid.Empty
+                || !request.LeadId.HasValue || request.LeadId.Value == Guid.Empty
+                || !request.CampaignLeadId.HasValue || request.CampaignLeadId.Value == Guid.Empty
+                || !request.AttemptNumber.HasValue || request.AttemptNumber.Value <= 0)
+                throw new ArgumentException(
+                    "Campaign calls require valid campaign, campaign-lead, lead and attempt identifiers.");
+
+            // CampaignLead.LeadId is the campaign contact identifier in the current model.
+            idempotencyKey = CallIdempotency.Derive(tenantId, request.CampaignId.Value,
+                request.LeadId.Value, request.AttemptNumber.Value);
+            var existing = await _callSessions.FirstOrDefaultAsync(x =>
+                x.TenantId == tenantId && x.IdempotencyKey == idempotencyKey, ct);
+            if (existing is not null)
+                return existing;
+        }
+
         var session = new CallSession
         {
             TenantId = tenantId,
@@ -100,6 +121,8 @@ public class CallService : ICallService
             CustomerId = request.CustomerId,
             LeadId = request.LeadId,
             CampaignId = request.CampaignId,
+            CampaignLeadId = request.CampaignLeadId,
+            IdempotencyKey = idempotencyKey,
             FromNumber = request.FromNumber,
             ToNumber = request.ToNumber,
             Status = CallStatus.Ringing

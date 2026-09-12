@@ -425,22 +425,27 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             return Result(state, state.Bengali ? "বুকিং নিশ্চিত করতে হ্যাঁ, অথবা বাতিল করতে না বলুন।"
                 : "Please say yes to confirm the booking, or no to cancel.");
 
-        try
+        var booking = await appointments.TryBookAsync(tenantId,
+            new BookAppointmentCommand(state.SlotId!.Value, state.CustomerName, state.Contact, state.Purpose), ct);
+        if (booking.Outcome is BookingOutcome.Booked or BookingOutcome.AlreadyYours)
         {
-            var booking = await appointments.BookAsync(tenantId,
-                new BookAppointmentCommand(state.SlotId!.Value, state.CustomerName, state.Contact, state.Purpose), ct);
             state = state with { Stage = "booked" };
             return Result(state, state.Bengali
                 ? $"আপনার অ্যাপয়েন্টমেন্ট নিশ্চিত হয়েছে। বুকিং রেফারেন্স {booking.BookingReference}। ধন্যবাদ।"
                 : $"Your appointment is confirmed. Booking reference {booking.BookingReference}. Thank you.", true);
         }
-        catch (InvalidOperationException)
+
+        if (booking.Outcome == BookingOutcome.SlotTaken)
         {
             state = state with { SlotId = null, SlotTimeUtc = null, Stage = "date-time" };
             return Result(state, state.Bengali
                 ? "দুঃখিত, সময়টি ইতিমধ্যে বুক হয়েছে। অন্য সময় বলুন।"
                 : "Sorry, that slot was just booked. Please choose another time.");
         }
+
+        return Result(state, state.Bengali
+            ? "দুঃখিত, বুকিংটি শেষ করতে পারিনি। একজন সহকর্মী আপনাকে সাহায্য করবেন।"
+            : "Sorry, I could not finish the booking. A colleague will help you.");
     }
 
     private static VoiceDecision? TryFastCommonReply(string input, string language)
