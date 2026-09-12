@@ -37,12 +37,12 @@ public sealed class TextConversationSimulatorTests
         var frames = new TextConversationSimulator().Run(scenario);
 
         var openingLines = string.IsNullOrWhiteSpace(scenario.Welcome) ? 1 : 2;
-        Assert.Equal(BookingStage.CollectingWhen, frames[0].State.Stage);
+        Assert.Equal(BookingStage.ChoosingIntent, frames[0].State.Stage);
         Assert.Equal(Enumerable.Repeat("Speak", openingLines).ToArray(), frames[0].Actions);
 
         if (!string.IsNullOrWhiteSpace(scenario.Welcome))
             Assert.Equal(scenario.Welcome.Trim(), frames[0].SpokenLines[0]);
-        Assert.Equal(EnglishBookingPhrases.Instance.AskWhen(), frames[0].SpokenLines[^1]);
+        Assert.Equal(((IBookingPhrases)EnglishBookingPhrases.Instance).AskIntent(), frames[0].SpokenLines[^1]);
 
         for (var i = 0; i < scenario.Steps.Count; i++)
         {
@@ -92,7 +92,7 @@ public sealed class TextConversationSimulatorTests
 
         // Every reference a scenario ever commits, in the form the agent would read it aloud.
         var spokenReferences = scenario.Steps
-            .Where(s => s.Kind == "committed" && !string.IsNullOrWhiteSpace(s.Reference))
+            .Where(s => (s.Kind == "committed" || s.Kind == "rescheduled") && !string.IsNullOrWhiteSpace(s.Reference))
             .Select(s => phrases.SpeakReference(s.Reference!))
             .ToArray();
 
@@ -100,6 +100,9 @@ public sealed class TextConversationSimulatorTests
         {
             foreach (var line in frame.SpokenLines)
             {
+                Assert.DoesNotContain(scenario.Contact, line, StringComparison.OrdinalIgnoreCase);
+                if (line.Contains("appointment has been cancelled", StringComparison.OrdinalIgnoreCase))
+                    Assert.True(frame.State.CancellationConfirmed);
                 // 1. Never claim a booking that does not exist. This is the property the whole
                 //    state machine is built around, and the one a caller would be hurt by: the
                 //    only path to a reference is a commit actually coming back.
@@ -127,20 +130,35 @@ public sealed class TextConversationSimulatorTests
                 && frame.SpokenLines.Length > 0)
             {
                 var readback = frame.SpokenLines[^1];
-                var name = frame.State.CallerName ?? frame.State.Contact;
+                var name = string.IsNullOrWhiteSpace(frame.State.CallerName) || frame.State.CallerName == frame.State.Contact
+                    ? "you" : frame.State.CallerName;
 
                 Assert.Contains(phrases.SpeakDate(DateOnly.FromDateTime(slot.StartsAtLocal),
                     DateOnly.FromDateTime(scenario.NowLocal)), readback, StringComparison.OrdinalIgnoreCase);
                 Assert.Contains(phrases.SpeakTime(TimeOnly.FromDateTime(slot.StartsAtLocal)),
                     readback, StringComparison.OrdinalIgnoreCase);
                 Assert.Contains(name, readback, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains(EnglishBookingPhrases.SpeakContactSuffix(frame.State.Contact),
+                    readback, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (frame.State.Stage is BookingStage.ConfirmingCancellation or BookingStage.ConfirmingReschedule
+                && frame.State.Existing is { } existing && frame.SpokenLines.Length > 0)
+            {
+                var readback = frame.SpokenLines[^1];
+                Assert.Contains(phrases.SpeakDate(DateOnly.FromDateTime(existing.Slot.StartsAtLocal),
+                    DateOnly.FromDateTime(scenario.NowLocal)), readback, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains(phrases.SpeakTime(TimeOnly.FromDateTime(existing.Slot.StartsAtLocal)),
+                    readback, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains(EnglishBookingPhrases.SpeakContactSuffix(frame.State.Contact), readback);
             }
 
             // 4. A committed booking must be for the slot the caller actually agreed to.
             if (frame.State.Stage == BookingStage.Booked)
                 Assert.Contains(frames,
                     f => f.Actions.Any(a => a.StartsWith(
-                        $"Commit:{frame.State.Selected!.SlotId}", StringComparison.Ordinal)));
+                        $"Commit:{frame.State.Selected!.SlotId}", StringComparison.Ordinal)
+                        || a == $"Reschedule:{frame.State.Existing?.BookingId}:{frame.State.Selected!.SlotId}"));
         }
     }
 

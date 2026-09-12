@@ -31,7 +31,7 @@ namespace CCaaS.Domain.Scheduling.Booking;
 /// covers, changing the subject. The model handles the talking. It does not decide whether an
 /// appointment is booked.
 /// </summary>
-public sealed class BookingConversationMachine
+public sealed partial class BookingConversationMachine
 {
     private readonly IDateTimeParser _parser;
     private readonly IBookingPhrases _say;
@@ -50,14 +50,14 @@ public sealed class BookingConversationMachine
     /// <summary>Opens the call. <paramref name="welcomeLine"/> comes from the agent configuration.</summary>
     public BookingTurn Begin(string contact, string? welcomeLine = null)
     {
-        var state = BookingState.Start(contact) with { Stage = BookingStage.CollectingWhen };
+        var state = BookingState.Start(contact) with { Stage = BookingStage.ChoosingIntent };
 
         var actions = new List<BookingAction>();
         if (!string.IsNullOrWhiteSpace(welcomeLine))
             actions.Add(new BookingAction.Speak(welcomeLine.Trim()));
-        actions.Add(new BookingAction.Speak(_say.AskWhen()));
+        actions.Add(new BookingAction.Speak(_say.AskIntent()));
 
-        return new BookingTurn(state, actions);
+        return Remember(new BookingTurn(state, actions));
     }
 
     public BookingTurn Advance(BookingState state, BookingInput input, DateTimeParseContext context)
@@ -67,15 +67,23 @@ public sealed class BookingConversationMachine
         if (state.IsTerminal)
             return new BookingTurn(state, Array.Empty<BookingAction>());
 
-        return input switch
+        return Remember(input switch
         {
             BookingInput.CallerSpoke spoke => OnCallerSpoke(state, spoke.Utterance, context),
             BookingInput.CallerSilent => OnSilence(state, context),
-            BookingInput.AvailabilityChecked checkedSlots => OnAvailability(state, checkedSlots.Slots, context),
-            BookingInput.BookingCommitted committed => OnCommitted(state, committed.Reference, context),
-            BookingInput.BookingRejected rejected => OnRejected(state, rejected.Failure, context),
+            BookingInput.AvailabilityChecked checkedSlots when state.Stage == BookingStage.CheckingAvailability => OnAvailability(state, checkedSlots.Slots, context),
+            BookingInput.BookingCommitted committed when state.Stage == BookingStage.Booking => OnCommitted(state, committed.Reference, context),
+            BookingInput.BookingRejected rejected when state.Stage == BookingStage.Booking => OnRejected(state, rejected.Failure, context),
+            BookingInput.AppointmentsFound found when state.Stage == BookingStage.LookingUpAppointments =>
+                OnAppointmentsFound(state, found.Appointments, context),
+            BookingInput.AppointmentCancelled when state.Stage == BookingStage.CancellingAppointment =>
+                OnCancelled(state),
+            BookingInput.AppointmentRescheduled changed when state.Stage == BookingStage.Rescheduling =>
+                OnCommitted(state, changed.Reference, context),
+            BookingInput.AppointmentChangeRejected when state.Stage is BookingStage.CancellingAppointment or BookingStage.Rescheduling =>
+                Transfer(state with { HandoffPending = false }, state.HandoffPending ? HandoffReason.CallerAsked : HandoffReason.BookingFailed),
             _ => new BookingTurn(state, Array.Empty<BookingAction>())
-        };
+        });
     }
 
     // =====================================================================================
@@ -87,10 +95,13 @@ public sealed class BookingConversationMachine
         // While a database round trip is in flight the caller may still be talking. Those words
         // are not an answer to anything, and counting them as failure would end healthy calls.
         var move = CallerIntent.Detect(utterance);
+        if (state.Stage == BookingStage.ChoosingIntent && utterance.Trim().TrimEnd('.', '!', '?')
+            .Equals("cancel", StringComparison.OrdinalIgnoreCase))
+            move = CallerMove.CancelAppointment;
         if (state.IsWaitingOnSystem)
         {
             if (move == CallerMove.WantsHuman)
-                return state.Stage == BookingStage.Booking
+                return state.Stage is BookingStage.Booking or BookingStage.CancellingAppointment or BookingStage.Rescheduling
                     ? new BookingTurn(state with { HandoffPending = true }, Array.Empty<BookingAction>())
                     : Transfer(state, HandoffReason.CallerAsked);
             return new BookingTurn(state, Array.Empty<BookingAction>());
@@ -109,12 +120,32 @@ public sealed class BookingConversationMachine
         if (state.CallerTurns > _policy.MaxTurns)
             return Transfer(state, HandoffReason.CallLengthExceeded);
 
+        if (move == CallerMove.Repeat)
+        {
+            var question = state.LastQuestion ?? CurrentQuestion(state, context);
+            return new BookingTurn(state, question is null ? Array.Empty<BookingAction>()
+                : new BookingAction[] { new BookingAction.Speak(question) });
+        }
+        if (move is CallerMove.CancelAppointment or CallerMove.RescheduleAppointment)
+            return StartChange(state, move);
+        if (state.Stage == BookingStage.ChoosingIntent)
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(utterance,
+                @"\b(?:book|schedule|appointment)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                && !_parser.Parse(utterance, context).HasAnything)
+                return Progress(state with { Intent = BookingIntent.Book, Stage = BookingStage.CollectingWhen },
+                    new BookingAction.Speak(_say.AskWhen()));
+            state = state with { Intent = BookingIntent.Book, Stage = BookingStage.CollectingWhen };
+        }
+
         return state.Stage switch
         {
             BookingStage.Opening or BookingStage.CollectingWhen => OnWhen(state, utterance, context),
             BookingStage.ResolvingAmbiguity => OnAmbiguityAnswer(state, utterance, context),
             BookingStage.OfferingAlternatives => OnAlternativeChosen(state, utterance, move, context),
             BookingStage.CollectingName => OnName(state, utterance, context),
+            BookingStage.ConfirmingCancellation or BookingStage.ConfirmingReschedule =>
+                OnChangeConfirmation(state, utterance, move, context),
             BookingStage.ConfirmingBooking => OnConfirmation(state, utterance, move, context),
             _ => NoProgress(state, context, _say.DidNotCatchThat())
         };
@@ -214,6 +245,8 @@ public sealed class BookingConversationMachine
     private BookingTurn OnAlternativeChosen(
         BookingState state, string utterance, CallerMove move, DateTimeParseContext context)
     {
+        var correction = NegativeCorrection(state, utterance, context);
+        if (correction is not null) return correction;
         var parsed = _parser.Parse(utterance, context);
         if (parsed.DateCertainty == ValueCertainty.Ambiguous) return AskForClearDate(Merge(state, parsed));
 
@@ -262,7 +295,7 @@ public sealed class BookingConversationMachine
 
         return Progress(
             state with { CallerName = name, Stage = BookingStage.ConfirmingBooking },
-            new BookingAction.Speak(_say.ReadBackForConfirmation(state.Selected!, name, Today(context))));
+            new BookingAction.Speak(Readback(state with { CallerName = name }, context)));
     }
 
     /// <summary>The last gate before anything irreversible happens.</summary>
@@ -271,12 +304,23 @@ public sealed class BookingConversationMachine
     {
         // A correction takes priority over the yes/no reading: "no, make it four" is both a
         // refusal and a new request, and only the second half is useful.
+        var correction = NegativeCorrection(state, utterance, context);
+        if (correction is not null) return correction;
         var parsed = _parser.Parse(utterance, context);
         if (parsed.DateCertainty == ValueCertainty.Ambiguous) return AskForClearDate(Merge(state, parsed));
-        if (parsed.HasAnything && !parsed.IsInPast)
-            return AfterWhen(
-                Merge(state with { Selected = null, Offered = Array.Empty<OfferedSlot>() }, parsed),
-                context);
+        if (parsed.HasAnything)
+            return OnWhen(state with { Selected = null, Offered = Array.Empty<OfferedSlot>() }, utterance, context);
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(utterance,
+            @"\b(?:my name is|name is|call me)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            && CallerIntent.ExtractName(utterance) is { } correctedName)
+            return Progress(state with { CallerName = correctedName },
+                new BookingAction.Speak(Readback(state with { CallerName = correctedName }, context)));
+
+        if (move == CallerMove.Affirmative && state.Intent == BookingIntent.Reschedule)
+            return Progress(state with { Stage = BookingStage.Rescheduling },
+                new BookingAction.Speak("I am securing the new time before cancelling the old appointment."),
+                new BookingAction.RescheduleBooking(state.Existing!.BookingId, state.Selected!.SlotId));
 
         if (move == CallerMove.Affirmative)
             return Progress(
@@ -439,7 +483,7 @@ public sealed class BookingConversationMachine
 
         return Progress(chosen with { Stage = BookingStage.ConfirmingBooking },
             new BookingAction.Speak(
-                _say.ReadBackForConfirmation(slot, NameForBooking(chosen), Today(context))));
+                Readback(chosen, context)));
     }
 
     /// <summary>The conversation moved forward, so the patience counter resets.</summary>
@@ -483,6 +527,8 @@ public sealed class BookingConversationMachine
     /// <summary>The question the caller is currently being asked, so "sorry?" can repeat it.</summary>
     private string? CurrentQuestion(BookingState state, DateTimeParseContext context) => state.Stage switch
     {
+        BookingStage.ChoosingIntent => _say.AskIntent(),
+        BookingStage.ConfirmingCancellation or BookingStage.ConfirmingReschedule => ChangeReadback(state, context),
         BookingStage.Opening => _say.AskWhen(),
         BookingStage.CollectingWhen when state.Date is null => _say.AskWhichDay(),
         BookingStage.CollectingWhen => _say.AskWhatTime(state.Date!.Value, Today(context)),
@@ -490,7 +536,7 @@ public sealed class BookingConversationMachine
         BookingStage.OfferingAlternatives => _say.OfferAlternatives(state.Offered, Today(context)),
         BookingStage.CollectingName => _say.AskName(),
         BookingStage.ConfirmingBooking when state.Selected is not null =>
-            _say.ReadBackForConfirmation(state.Selected, state.CallerName ?? "you", Today(context)),
+            Readback(state, context),
         _ => null
     };
 
@@ -539,7 +585,7 @@ public sealed class BookingConversationMachine
             next = next with { Date = parsed.Date, DateCertainty = parsed.DateCertainty };
 
         if (parsed.HasTime)
-            next = next with { Time = parsed.Time, TimeCertainty = parsed.TimeCertainty };
+            next = next with { Time = parsed.Time, TimeCertainty = parsed.TimeCertainty, DayPart = parsed.DayPart };
 
         if (parsed.DayPart != DayPart.None)
             next = next with { DayPart = parsed.DayPart };

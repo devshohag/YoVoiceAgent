@@ -60,6 +60,7 @@ public sealed class ScenarioStep
     public required string Kind { get; init; }
     public string? Text { get; init; }
     public List<OfferedSlot>? Slots { get; init; }
+    public List<ExistingAppointment>? Appointments { get; init; }
     public string? Reference { get; init; }
     public BookingFailure? Failure { get; init; }
     public required BookingStage Stage { get; init; }
@@ -116,6 +117,13 @@ public sealed class TextConversationSimulator
             {
                 "say" when step.Text is not null => new BookingInput.CallerSpoke(step.Text),
                 "silence" => new BookingInput.CallerSilent(),
+                "appointments" when current.State.Stage == BookingStage.LookingUpAppointments
+                    && step.Appointments is not null => new BookingInput.AppointmentsFound(step.Appointments),
+                "cancelled" when current.State.Stage == BookingStage.CancellingAppointment => new BookingInput.AppointmentCancelled(),
+                "rescheduled" when current.State.Stage == BookingStage.Rescheduling
+                    && !string.IsNullOrWhiteSpace(step.Reference) => new BookingInput.AppointmentRescheduled(step.Reference),
+                "changeRejected" when current.State.Stage is BookingStage.CancellingAppointment or BookingStage.Rescheduling =>
+                    new BookingInput.AppointmentChangeRejected(),
                 "availability" when current.State.Stage == BookingStage.CheckingAvailability
                     && step.Slots is not null => new BookingInput.AvailabilityChecked(step.Slots),
                 "committed" when current.State.Stage == BookingStage.Booking
@@ -140,6 +148,9 @@ public sealed class TextConversationSimulator
         BookingAction.LookUpAvailability l => $"Lookup:{l.Date:yyyy-MM-dd}:"
             + $"{l.PreferredTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "none"}:{l.DayPart}",
         BookingAction.CommitBooking c => $"Commit:{c.SlotId}:{c.CallerName}:{c.Contact}",
+        BookingAction.FindUpcomingAppointments f => $"FindAppointments:{f.Contact}",
+        BookingAction.CancelBooking c => $"Cancel:{c.BookingId}",
+        BookingAction.RescheduleBooking r => $"Reschedule:{r.BookingId}:{r.NewSlotId}",
         BookingAction.TransferToHuman t => $"Transfer:{t.Reason}",
         BookingAction.EndCall e => $"End:{e.Reason}",
         _ => throw new InvalidOperationException($"Unhandled action: {action.GetType().Name}")
@@ -148,6 +159,9 @@ public sealed class TextConversationSimulator
     // Stable projection for scenario assertions and readable failure reports.
     public static Dictionary<string, object?> Snapshot(BookingState state) => new()
     {
+        ["intent"] = state.Intent.ToString(),
+        ["existing"] = state.Existing?.BookingId.ToString(),
+        ["cancellationConfirmed"] = state.CancellationConfirmed,
         ["date"] = state.Date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         ["time"] = state.Time?.ToString("HH:mm", CultureInfo.InvariantCulture),
         ["dateCertainty"] = state.DateCertainty.ToString(),

@@ -1,0 +1,92 @@
+{
+  "name": "34-repeat-cancel-readback",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "LookingUpAppointments",
+      "actions": [
+        "Speak",
+        "FindAppointments:+8801712345678"
+      ],
+      "text": "cancel my appointment",
+      "expect": {
+        "intent": "Cancel",
+        "waiting": true
+      },
+      "says": [
+        "Let me find your upcoming appointment."
+      ]
+    },
+    {
+      "kind": "appointments",
+      "stage": "ConfirmingCancellation",
+      "actions": [
+        "Speak"
+      ],
+      "appointments": [
+        {
+          "bookingId": "26000000-0000-0000-0000-000000000001",
+          "slot": {
+            "slotId": "26000000-0000-0000-0000-000000000002",
+            "startsAtLocal": "2026-09-18T10:00:00",
+            "startsAtUtc": "2026-09-18T04:00:00Z",
+            "providerName": "Provider A"
+          },
+          "callerName": "Rahim",
+          "contact": "+8801712345678"
+        }
+      ],
+      "says": [
+        "number ending seven eight"
+      ],
+      "expect": {
+        "existing": "26000000-0000-0000-0000-000000000001"
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "ConfirmingCancellation",
+      "actions": [
+        "Speak"
+      ],
+      "text": "say that again",
+      "says": [
+        "Shall I cancel"
+      ],
+      "expect": {
+        "noProgress": 0
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CancellingAppointment",
+      "actions": [
+        "Speak",
+        "Cancel:26000000-0000-0000-0000-000000000001"
+      ],
+      "text": "yes",
+      "expect": {
+        "cancellationConfirmed": false
+      },
+      "says": [
+        "I am cancelling that appointment now."
+      ]
+    },
+    {
+      "kind": "cancelled",
+      "stage": "Ended",
+      "actions": [
+        "Speak:closing",
+        "End:cancelled"
+      ],
+      "says": [
+        "appointment has been cancelled"
+      ],
+      "expect": {
+        "cancellationConfirmed": true
+      }
+    }
+  ]
+}

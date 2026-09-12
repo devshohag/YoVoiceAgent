@@ -37,7 +37,7 @@ public class BookingConversationMachineTests
     {
         var call = new Call();
 
-        call.Expect(BookingStage.CollectingWhen, "ASK_WHEN");
+        call.Expect(BookingStage.ChoosingIntent, "ASK_INTENT");
 
         call.Says("tomorrow at four")
             .Expect(BookingStage.CheckingAvailability, "CHECKING", "LOOKUP:2026-09-17:16:00:None");
@@ -231,7 +231,7 @@ public class BookingConversationMachineTests
     public void SilenceCountsTheSameWayAsNonsense()
     {
         var call = new Call();
-        call.Silent().Expect(BookingStage.CollectingWhen, "REPEAT", "ASK_DAY");
+        call.Silent().Expect(BookingStage.ChoosingIntent, "REPEAT", "ASK_INTENT");
         call.Silent().Expect(BookingStage.Transferring, "HANDOVER:NoProgress", "TRANSFER:NoProgress");
     }
 
@@ -411,7 +411,7 @@ public class BookingConversationMachineTests
         // it apart from a name somebody actually gave.
         var call = new Call(Ctx(), new BookingPolicy(RequireName: false));
         call.Says("tomorrow at four").Available(Slot(16, 0))
-            .Expect(BookingStage.ConfirmingBooking, "READBACK:1600:+8801712345678");
+            .Expect(BookingStage.ConfirmingBooking, "READBACK:1600:you");
     }
 
     // =====================================================================================
@@ -491,6 +491,8 @@ public class BookingConversationMachineTests
     /// </summary>
     private sealed class TaggedPhrases : IBookingPhrases
     {
+        public string AskIntent() => "ASK_INTENT";
+        public string ContactReadback(string contact) => "";
         public string AskWhen() => "ASK_WHEN";
         public string AskWhichDay() => "ASK_DAY";
         public string AskWhatTime(DateOnly date, DateOnly today) => "ASK_TIME";

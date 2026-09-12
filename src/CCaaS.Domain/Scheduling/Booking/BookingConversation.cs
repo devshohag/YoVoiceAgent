@@ -51,7 +51,13 @@ public enum BookingStage
     Transferring,
 
     /// <summary>Terminal. The caller did not want to book, or the call ran out of road.</summary>
-    Ended
+    Ended,
+    ChoosingIntent,
+    LookingUpAppointments,
+    ConfirmingCancellation,
+    CancellingAppointment,
+    ConfirmingReschedule,
+    Rescheduling
 }
 
 /// <summary>Why the conversation was handed to a human. Written to the call record.</summary>
@@ -123,9 +129,17 @@ public sealed record BookingPolicy(
 /// the ONLY thing that needs persisting to survive a worker restart mid-call, and replaying a
 /// call from its transcript reproduces it exactly.
 /// </summary>
+public enum BookingIntent { Undecided, Book, Cancel, Reschedule }
+
+public sealed record ExistingAppointment(Guid BookingId, OfferedSlot Slot, string CallerName, string Contact);
+
 public sealed record BookingState
 {
     public BookingStage Stage { get; init; } = BookingStage.Opening;
+    public BookingIntent Intent { get; init; }
+    public ExistingAppointment? Existing { get; init; }
+    public string? LastQuestion { get; init; }
+    public bool CancellationConfirmed { get; init; }
 
     // ---- what the caller has asked for
     public DateOnly? Date { get; init; }
@@ -172,7 +186,8 @@ public sealed record BookingState
 
     /// <summary>True while the machine is waiting on the orchestrator rather than the caller.</summary>
     public bool IsWaitingOnSystem =>
-        Stage is BookingStage.CheckingAvailability or BookingStage.Booking;
+        Stage is BookingStage.CheckingAvailability or BookingStage.Booking
+            or BookingStage.LookingUpAppointments or BookingStage.CancellingAppointment or BookingStage.Rescheduling;
 
     public static BookingState Start(string contact) =>
         new() { Stage = BookingStage.Opening, Contact = contact };
@@ -190,6 +205,10 @@ public abstract record BookingInput
 
     /// <summary>The endpointer timed out with nothing said.</summary>
     public sealed record CallerSilent : BookingInput;
+    public sealed record AppointmentsFound(IReadOnlyList<ExistingAppointment> Appointments) : BookingInput;
+    public sealed record AppointmentCancelled : BookingInput;
+    public sealed record AppointmentRescheduled(string Reference) : BookingInput;
+    public sealed record AppointmentChangeRejected : BookingInput;
 
     /// <summary>Result of a <see cref="BookingAction.LookUpAvailability"/>.</summary>
     public sealed record AvailabilityChecked(IReadOnlyList<OfferedSlot> Slots) : BookingInput;
@@ -221,6 +240,10 @@ public abstract record BookingAction
         : BookingAction;
 
     public sealed record CommitBooking(Guid SlotId, string CallerName, string Contact) : BookingAction;
+
+    public sealed record FindUpcomingAppointments(string Contact) : BookingAction;
+    public sealed record CancelBooking(Guid BookingId) : BookingAction;
+    public sealed record RescheduleBooking(Guid BookingId, Guid NewSlotId) : BookingAction;
 
     public sealed record TransferToHuman(HandoffReason Reason) : BookingAction;
 

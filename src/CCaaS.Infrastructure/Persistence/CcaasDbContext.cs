@@ -213,6 +213,12 @@ public class CcaasDbContext : DbContext
         modelBuilder.Entity<AppointmentBooking>()
             .HasIndex(x => new { x.TenantId, x.IdempotencyKey }).IsUnique();
 
+        modelBuilder.Entity<AppointmentBooking>()
+            .Property(x => x.CancellationReason).HasMaxLength(500);
+        modelBuilder.Entity<AppointmentBooking>()
+            .HasIndex(x => new { x.TenantId, x.RescheduledFromBookingId }).IsUnique()
+            .HasFilter("[RescheduledFromBookingId] IS NOT NULL");
+
         ConfigurePhoneLookupIndexes(modelBuilder);
         ConfigureComplianceIndexes(modelBuilder);
         ConfigureDialerIndexes(modelBuilder);

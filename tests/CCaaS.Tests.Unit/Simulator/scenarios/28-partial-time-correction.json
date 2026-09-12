@@ -1,5 +1,5 @@
 {
-  "name": "17-name-not-required",
+  "name": "28-partial-time-correction",
   "nowLocal": "2026-09-16T10:00:00",
   "contact": "+8801712345678",
   "steps": [
@@ -22,12 +22,13 @@
     },
     {
       "kind": "availability",
-      "stage": "ConfirmingBooking",
+      "stage": "CollectingName",
       "actions": [
         "Speak"
       ],
       "expect": {
-        "name": null
+        "selected": "17160000-0000-0000-0000-000000000000",
+        "selectedUtc": "2026-09-17T10:00:00.0000000Z"
       },
       "slots": [
         {
@@ -38,44 +39,52 @@
         }
       ],
       "says": [
-        "So that's tomorrow at four o'clock in the afternoon for you. Shall I book it?"
+        "And what name should I put the appointment under?"
       ]
     },
     {
       "kind": "say",
-      "stage": "Booking",
+      "stage": "ConfirmingBooking",
       "actions": [
-        "Speak",
-        "Commit:17160000-0000-0000-0000-000000000000:+8801712345678:+8801712345678"
+        "Speak"
       ],
       "expect": {
-        "waiting": true,
-        "reference": null,
-        "selected": "17160000-0000-0000-0000-000000000000"
+        "name": "Rahim Uddin",
+        "reference": null
       },
-      "text": "yes",
+      "text": "Rahim Uddin",
       "says": [
-        "Booking that now."
+        "So that's tomorrow at four o'clock in the afternoon for Rahim Uddin. Shall I book it?"
       ]
     },
     {
-      "kind": "committed",
-      "stage": "Booked",
+      "kind": "say",
+      "stage": "CollectingWhen",
       "actions": [
-        "Speak:closing",
-        "End:booked"
+        "Speak"
+      ],
+      "text": "not four, earlier",
+      "says": [
+        "What time"
       ],
       "expect": {
-        "reference": "APT-SIM-001",
-        "terminal": true
-      },
-      "reference": "APT-SIM-001",
+        "date": "2026-09-17",
+        "time": null,
+        "selected": null,
+        "noProgress": 0
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:15:00:None"
+      ],
+      "text": "three pm",
       "says": [
-        "You're booked for tomorrow at four o'clock in the afternoon. Your reference is zero zero one. You'll get a text message with the details. Thanks for choosing us."
+        "Let me check that for you."
       ]
     }
-  ],
-  "policy": {
-    "requireName": false
-  }
+  ]
 }

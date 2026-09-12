@@ -1,0 +1,120 @@
+{
+  "name": "25-reschedule",
+  "nowLocal": "2026-09-16T10:00:00",
+  "contact": "+8801712345678",
+  "steps": [
+    {
+      "kind": "say",
+      "stage": "LookingUpAppointments",
+      "actions": [
+        "Speak",
+        "FindAppointments:+8801712345678"
+      ],
+      "text": "reschedule my appointment",
+      "expect": {
+        "intent": "Reschedule",
+        "waiting": true
+      },
+      "says": [
+        "Let me find your upcoming appointment."
+      ]
+    },
+    {
+      "kind": "appointments",
+      "stage": "ConfirmingReschedule",
+      "actions": [
+        "Speak"
+      ],
+      "appointments": [
+        {
+          "bookingId": "26000000-0000-0000-0000-000000000001",
+          "slot": {
+            "slotId": "26000000-0000-0000-0000-000000000002",
+            "startsAtLocal": "2026-09-18T10:00:00",
+            "startsAtUtc": "2026-09-18T04:00:00Z",
+            "providerName": "Provider A"
+          },
+          "callerName": "Rahim",
+          "contact": "+8801712345678"
+        }
+      ],
+      "says": [
+        "number ending seven eight"
+      ],
+      "expect": {
+        "existing": "26000000-0000-0000-0000-000000000001"
+      }
+    },
+    {
+      "kind": "say",
+      "stage": "CollectingWhen",
+      "actions": [
+        "Speak"
+      ],
+      "text": "yes",
+      "says": [
+        "current appointment stays in place"
+      ]
+    },
+    {
+      "kind": "say",
+      "stage": "CheckingAvailability",
+      "actions": [
+        "Speak",
+        "Lookup:2026-09-17:16:00:None"
+      ],
+      "text": "tomorrow at four",
+      "says": [
+        "Let me check that for you."
+      ]
+    },
+    {
+      "kind": "availability",
+      "stage": "ConfirmingBooking",
+      "actions": [
+        "Speak"
+      ],
+      "slots": [
+        {
+          "slotId": "17160000-0000-0000-0000-000000000000",
+          "startsAtLocal": "2026-09-17T16:00:00",
+          "startsAtUtc": "2026-09-17T10:00:00Z",
+          "providerName": "Provider A"
+        }
+      ],
+      "says": [
+        "number ending seven eight"
+      ]
+    },
+    {
+      "kind": "say",
+      "stage": "Rescheduling",
+      "actions": [
+        "Speak",
+        "Reschedule:26000000-0000-0000-0000-000000000001:17160000-0000-0000-0000-000000000000"
+      ],
+      "text": "yes",
+      "expect": {
+        "reference": null
+      },
+      "says": [
+        "I am securing the new time before cancelling the old appointment."
+      ]
+    },
+    {
+      "kind": "rescheduled",
+      "stage": "Booked",
+      "actions": [
+        "Speak:closing",
+        "End:booked"
+      ],
+      "reference": "APT-2601",
+      "expect": {
+        "reference": "APT-2601"
+      },
+      "says": [
+        "You're booked for tomorrow at four o'clock in the afternoon."
+      ]
+    }
+  ]
+}

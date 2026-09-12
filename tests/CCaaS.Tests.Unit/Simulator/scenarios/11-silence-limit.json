@@ -5,7 +5,7 @@
   "steps": [
     {
       "kind": "silence",
-      "stage": "CollectingWhen",
+      "stage": "ChoosingIntent",
       "actions": [
         "Speak",
         "Speak"
@@ -15,7 +15,7 @@
       },
       "says": [
         "Sorry, I didn't catch that. Could you say it again?",
-        "Which day would you like to come in?"
+        "Would you like to book, cancel, or reschedule"
       ]
     },
     {
