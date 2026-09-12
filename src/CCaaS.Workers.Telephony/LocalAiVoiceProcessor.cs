@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using CCaaS.Application.Ai;
 using CCaaS.Application.Appointment;
 using CCaaS.Application.Calls;
+using CCaaS.Application.Routing;
 using CCaaS.Domain.Ai;
 using CCaaS.Domain.Organization;
 using CCaaS.Infrastructure.ObjectStorage;
@@ -173,7 +174,8 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
             AiConversationId = conversation.Id, Speaker = AiSpeaker.Customer,
             Text = transcript.Text, Sequence = sequence });
 
-        var explicitHandoff = HumanRequestRegex().IsMatch(transcript.Text);
+        var route = DeterministicTurnRouter.Select(priorTurns, transcript.Text);
+        var explicitHandoff = route == TurnRoute.HumanHandoff;
         var appointment = explicitHandoff ? null : await TryHandleAppointmentAsync(
             scope.ServiceProvider.GetRequiredService<IAppointmentService>(), source.TenantId,
             priorTurns, transcript.Text, transcript.Language, ct);
@@ -182,8 +184,12 @@ public sealed partial class LocalAiVoiceProcessor : BackgroundService
                 ? "অনুগ্রহ করে অপেক্ষা করুন, আমি আপনাকে একজন মানব সহায়তা প্রতিনিধির সাথে সংযুক্ত করছি।"
                 : "Please hold while I connect you to a human support agent.", false, true,
                 "Caller explicitly requested a human agent.")
-            : appointment?.Decision ?? TryFastCommonReply(transcript.Text, transcript.Language)
-                ?? await GenerateReplyAsync(llm, agent, priorTurns, transcript.Text, transcript.Language, ct);
+            : appointment?.Decision ?? (route == TurnRoute.General
+                ? TryFastCommonReply(transcript.Text, transcript.Language)
+                    ?? await GenerateReplyAsync(llm, agent, priorTurns, transcript.Text, transcript.Language, ct)
+                : new VoiceDecision(transcript.Language.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
+                    ? "অনুগ্রহ করে অ্যাপয়েন্টমেন্টের তারিখ বা সময়টি বলুন।"
+                    : "Please tell me the appointment date or time.", false, false, null));
         if (string.IsNullOrWhiteSpace(decision.Reply))
             decision = decision with { Reply = transcript.Language.StartsWith("bn", StringComparison.OrdinalIgnoreCase)
                 ? "দুঃখিত, অনুগ্রহ করে কথাটি আবার বলুন।" : "Sorry, please say that again." };
