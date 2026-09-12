@@ -11,6 +11,7 @@
 
   --accent: #3d4ea3;
   --accent-contrast: #ffffff;
+  --danger-contrast: #ffffff;
   --focus-ring: #3d4ea3;
 
   --state-live: #b26a00;
@@ -51,6 +52,13 @@
   --motion-fast: 140ms;
   --motion-enter: 200ms;
   --ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  --control-height: 36px;
+  --icon-button-size: 36px;
+  --badge-dot-size: 6px;
+  --avatar-size: 32px;
+  --state-min-height: 120px;
+  --tooltip-max-width: 320px;
 }
 
 :root[data-theme="dark"] {
@@ -65,6 +73,7 @@
   --text-faint: #6f7986;
   --accent: #8b9ae4;
   --accent-contrast: #0e1116;
+  --danger-contrast: #ffffff;
   --focus-ring: #8b9ae4;
   --state-live: #e3a04a;
   --state-booked: #57b184;

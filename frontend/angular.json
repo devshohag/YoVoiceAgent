@@ -34,6 +34,7 @@
               "src/styles/tokens.css",
               "src/styles/base.css",
               "src/styles/a11y.css",
+              "src/app/shared/ui/core-components.css",
               "src/styles.scss"
             ]
           },
