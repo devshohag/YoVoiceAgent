@@ -191,6 +191,7 @@ services:
       Telephony__DefaultTenantId: ${CCAAS_DEMO_TENANT_ID:-3FA85F64-5717-4562-B3FC-2C963F66AFA6}
       AiVoice__Mode: ${AI_VOICE_MODE:-Local}
       AiVoice__MaxConcurrentCalls: ${AI_VOICE_MAX_CONCURRENT_CALLS:-2}
+      AiVoice__SpeechTimeoutMilliseconds: ${AI_VOICE_SPEECH_TIMEOUT_MILLISECONDS:-2500}
     volumes:
       - asterisk-recordings:/recordings
     depends_on:
