@@ -35,6 +35,7 @@
               "src/styles/base.css",
               "src/styles/a11y.css",
               "src/app/shared/ui/core-components.css",
+              "src/app/shared/ui/data-display.css",
               "src/styles.scss"
             ]
           },

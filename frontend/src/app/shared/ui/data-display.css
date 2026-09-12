@@ -1,0 +1,94 @@
+.data-table-wrap {
+  width: 100%;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.data-table-viewport {
+  min-height: var(--row-height-default);
+  max-height: 520px;
+  overflow: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: var(--text-sm);
+}
+
+.data-table th,
+.data-table td {
+  height: var(--row-height-default);
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.data-table th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky-header);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.data-table td.numeric,
+.data-table th.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table tbody tr:hover { background: var(--surface-sunken); }
+.data-table tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.data-table tbody tr[class*="state-row--"] td:first-child {
+  box-shadow: inset var(--state-border-width) 0 0 var(--stripe, transparent);
+}
+.data-table .state-row--live { --stripe: var(--state-live); }
+.data-table .state-row--booked { --stripe: var(--state-booked); }
+.data-table .state-row--transferred { --stripe: var(--state-transferred); }
+.data-table .state-row--abandoned { --stripe: var(--state-abandoned); }
+.data-table .state-row--suppressed { --stripe: var(--state-suppressed); }
+.data-table .state-row--machine { --stripe: var(--state-neutral); }
+.data-table .state-row--queued { --stripe: var(--state-pending); }
+
+.density-compact .data-table th,
+.density-compact .data-table td { height: var(--row-height-compact); }
+.density-comfortable .data-table th,
+.density-comfortable .data-table td { height: var(--row-height-comfortable); }
+
+.data-table__sticky-first th:first-child,
+.data-table__sticky-first td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: var(--z-sticky-cell);
+  background: var(--surface);
+}
+.data-table__sticky-first th:first-child { z-index: var(--z-sticky-corner); }
+
+.data-table__value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-table__value:focus-visible { outline-offset: -2px; }
+
+.data-table__message-cell {
+  height: var(--row-height-comfortable);
+  padding: var(--space-4);
+  color: var(--text-muted);
+  text-align: center;
+  white-space: normal;
+}

@@ -59,6 +59,13 @@
   --avatar-size: 32px;
   --state-min-height: 120px;
   --tooltip-max-width: 320px;
+  --row-height-compact: 28px;
+  --row-height-default: 36px;
+  --row-height-comfortable: 44px;
+  --state-border-width: 3px;
+  --z-sticky-header: 2;
+  --z-sticky-cell: 3;
+  --z-sticky-corner: 4;
 }
 
 :root[data-theme="dark"] {
