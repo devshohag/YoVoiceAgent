@@ -2,7 +2,8 @@
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "analytics": "555ed622-aea4-419a-a47b-8b8c63d6ea88"
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -30,6 +31,9 @@
               }
             ],
             "styles": [
+              "src/styles/tokens.css",
+              "src/styles/base.css",
+              "src/styles/a11y.css",
               "src/styles.scss"
             ]
           },
