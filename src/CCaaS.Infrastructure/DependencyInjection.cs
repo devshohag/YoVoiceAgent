@@ -95,8 +95,11 @@ public static class DependencyInjection
         services.AddHttpClient("ollama");
         services.AddHttpClient("local-ai-speech");
         services.AddScoped<IHandoffContextSummarizer, OllamaHandoffContextSummarizer>();
+        services.AddScoped<IProviderUsageWriter, ProviderUsageWriter>();
         services.AddScoped<DevelopmentAiProvider>();
-        services.AddScoped<ISpeechToTextProvider>(sp => sp.GetRequiredService<DevelopmentAiProvider>());
+        services.AddScoped<ISpeechToTextProvider>(sp => new MeteredSpeechToTextProvider(
+            sp.GetRequiredService<DevelopmentAiProvider>(), sp.GetRequiredService<IProviderUsageWriter>(),
+            sp.GetRequiredService<ICurrentTenant>()));
         services.AddScoped<ISummaryProvider>(sp => sp.GetRequiredService<DevelopmentAiProvider>());
         services.AddScoped<IQaScoringProvider>(sp => sp.GetRequiredService<DevelopmentAiProvider>());
         services.AddScoped<ISentimentProvider>(sp => sp.GetRequiredService<DevelopmentAiProvider>());

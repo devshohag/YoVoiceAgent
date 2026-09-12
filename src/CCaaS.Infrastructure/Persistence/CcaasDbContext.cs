@@ -134,6 +134,7 @@ public class CcaasDbContext : DbContext
     public DbSet<AiToolDefinition> AiToolDefinitions => Set<AiToolDefinition>();
     public DbSet<AiToolExecution> AiToolExecutions => Set<AiToolExecution>();
     public DbSet<AiUsageRecord> AiUsageRecords => Set<AiUsageRecord>();
+    public DbSet<ProviderUsage> ProviderUsages => Set<ProviderUsage>();
 
     // appointment
     public DbSet<AppointmentProvider> AppointmentProviders => Set<AppointmentProvider>();
@@ -183,7 +184,7 @@ public class CcaasDbContext : DbContext
         ApplySchema(modelBuilder, "telephony", typeof(SipTrunk), typeof(DidNumber), typeof(Extension), typeof(Queue), typeof(QueueMember), typeof(Ivr), typeof(RoutingRule), typeof(AsteriskNode));
         ApplySchema(modelBuilder, "calls", typeof(CallSession), typeof(CallLeg), typeof(CallEvent), typeof(Recording), typeof(Disposition), typeof(CallStageTiming));
         ApplySchema(modelBuilder, "compliance", typeof(ContactConsent), typeof(DoNotCallEntry), typeof(SuppressionCheck));
-        ApplySchema(modelBuilder, "ai", typeof(AiAgent), typeof(AiAgentVersion), typeof(AiConversation), typeof(AiConversationTurn), typeof(AiToolDefinition), typeof(AiToolExecution), typeof(AiUsageRecord));
+        ApplySchema(modelBuilder, "ai", typeof(AiAgent), typeof(AiAgentVersion), typeof(AiConversation), typeof(AiConversationTurn), typeof(AiToolDefinition), typeof(AiToolExecution), typeof(AiUsageRecord), typeof(ProviderUsage));
         ApplySchema(modelBuilder, "appointment", typeof(AppointmentProvider), typeof(AppointmentAvailabilitySlot), typeof(AppointmentBooking));
         ApplySchema(modelBuilder, "followup", typeof(FollowUpTask), typeof(Callback), typeof(Reminder));
         ApplySchema(modelBuilder, "billing", typeof(Plan), typeof(Subscription), typeof(Seat), typeof(UsageMeter), typeof(Invoice), typeof(InvoiceLine), typeof(Payment));
