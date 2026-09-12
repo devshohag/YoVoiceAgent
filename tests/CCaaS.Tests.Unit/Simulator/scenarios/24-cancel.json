@@ -14,7 +14,10 @@
       "expect": {
         "intent": "Cancel",
         "waiting": true
-      }
+      },
+      "says": [
+        "Let me find your upcoming appointment."
+      ]
     },
     {
       "kind": "appointments",
@@ -52,7 +55,10 @@
       "text": "yes",
       "expect": {
         "cancellationConfirmed": false
-      }
+      },
+      "says": [
+        "I am cancelling that appointment now."
+      ]
     },
     {
       "kind": "cancelled",

@@ -64,7 +64,10 @@
         "Speak:closing",
         "Transfer:BookingFailed"
       ],
-      "text": "no, wrong number"
+      "text": "no, wrong number",
+      "says": [
+        "I'm having trouble completing that. Let me put you through to a colleague."
+      ]
     }
   ]
 }

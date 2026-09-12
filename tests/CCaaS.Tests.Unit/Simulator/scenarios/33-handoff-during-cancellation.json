@@ -14,7 +14,10 @@
       "expect": {
         "intent": "Cancel",
         "waiting": true
-      }
+      },
+      "says": [
+        "Let me find your upcoming appointment."
+      ]
     },
     {
       "kind": "appointments",
@@ -52,7 +55,10 @@
       "text": "yes",
       "expect": {
         "cancellationConfirmed": false
-      }
+      },
+      "says": [
+        "I am cancelling that appointment now."
+      ]
     },
     {
       "kind": "say",
@@ -61,7 +67,8 @@
       "text": "human please",
       "expect": {
         "handoffPending": true
-      }
+      },
+      "says": []
     },
     {
       "kind": "cancelled",
@@ -73,7 +80,10 @@
       "expect": {
         "cancellationConfirmed": true,
         "handoffPending": false
-      }
+      },
+      "says": [
+        "Of course - let me put you through to a colleague."
+      ]
     }
   ]
 }

@@ -68,7 +68,10 @@
       "expect": {
         "date": "2026-09-18",
         "time": "16:00"
-      }
+      },
+      "says": [
+        "Let me check that for you."
+      ]
     }
   ]
 }

@@ -81,7 +81,10 @@
         "Speak",
         "Lookup:2026-09-17:15:00:None"
       ],
-      "text": "three pm"
+      "text": "three pm",
+      "says": [
+        "Let me check that for you."
+      ]
     }
   ]
 }

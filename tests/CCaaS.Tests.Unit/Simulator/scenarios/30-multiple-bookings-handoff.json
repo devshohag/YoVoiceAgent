@@ -14,7 +14,10 @@
       "expect": {
         "intent": "Cancel",
         "waiting": true
-      }
+      },
+      "says": [
+        "Let me find your upcoming appointment."
+      ]
     },
     {
       "kind": "appointments",
@@ -46,6 +49,9 @@
           "callerName": "Rahim",
           "contact": "+8801712345678"
         }
+      ],
+      "says": [
+        "I'm having trouble completing that. Let me put you through to a colleague."
       ]
     }
   ]

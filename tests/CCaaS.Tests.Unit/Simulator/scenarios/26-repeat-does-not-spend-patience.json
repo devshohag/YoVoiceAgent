@@ -27,7 +27,11 @@
       "text": "mmm",
       "expect": {
         "noProgress": 1
-      }
+      },
+      "says": [
+        "Sorry, I didn't catch that. Could you say it again?",
+        "Which day would you like to come in?"
+      ]
     },
     {
       "kind": "say",
@@ -67,7 +71,10 @@
       "text": "tomorrow at four",
       "expect": {
         "noProgress": 0
-      }
+      },
+      "says": [
+        "Let me check that for you."
+      ]
     }
   ]
 }
