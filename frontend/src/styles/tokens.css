@@ -21,6 +21,8 @@
   --state-suppressed: #6d3f8f;
   --state-neutral: var(--text-muted);
   --state-pending: var(--text-faint);
+  --warning: #8a5a00;
+  --warning-soft: #fff4d6;
 
   --font-ui: "Inter", "Noto Sans Bengali", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -59,6 +61,8 @@
   --avatar-size: 32px;
   --state-min-height: 120px;
   --tooltip-max-width: 320px;
+  --radius-full: 999px;
+  --size-spinner: 12px;
   --row-height-compact: 28px;
   --row-height-default: 36px;
   --row-height-comfortable: 44px;
@@ -90,6 +94,8 @@
   --state-transferred: #6fb0dd;
   --state-abandoned: #e2757c;
   --state-suppressed: #b189d4;
+  --warning: #e3b45f;
+  --warning-soft: #302716;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -111,6 +117,8 @@
     --state-transferred: #6fb0dd;
     --state-abandoned: #e2757c;
     --state-suppressed: #b189d4;
+    --warning: #e3b45f;
+    --warning-soft: #302716;
   }
 }
 
