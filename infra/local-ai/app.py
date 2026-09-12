@@ -1,5 +1,6 @@
 import asyncio
 import os
+import struct
 import subprocess
 import tempfile
 import wave
@@ -20,12 +21,53 @@ device = os.getenv("WHISPER_DEVICE", "cpu")
 compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 parallelism = max(1, int(os.getenv("SPEECH_NUM_PARALLEL", "2")))
 speech_slots = asyncio.Semaphore(parallelism)
+vad_threshold = max(0, int(os.getenv("VAD_SILENCE_THRESHOLD", "500")))
+vad_padding_ms = max(0, int(os.getenv("VAD_PADDING_MS", "80")))
 
 
 @lru_cache(maxsize=1)
 def whisper_model() -> WhisperModel:
     return WhisperModel(model_name, device=device, compute_type=compute_type,
                         download_root="/models/whisper")
+
+
+def trim_wav_silence(source_path: str, target_path: str) -> str:
+    """Trim quiet PCM WAV edges while retaining a small amount of speech padding."""
+    with wave.open(source_path, "rb") as source:
+        channels = source.getnchannels()
+        sample_width = source.getsampwidth()
+        frame_rate = source.getframerate()
+        frame_count = source.getnframes()
+        frames = source.readframes(frame_count)
+
+    if sample_width != 2 or frame_rate <= 0 or channels <= 0:
+        return source_path
+
+    frame_size = channels * sample_width
+    window_frames = max(1, frame_rate // 50)
+    active_windows = []
+    for offset in range(0, frame_count, window_frames):
+        window = frames[offset * frame_size:(offset + window_frames) * frame_size]
+        samples = struct.unpack(f"<{len(window) // 2}h", window)
+        peak = max((abs(sample) for sample in samples), default=0)
+        active_windows.append(peak > vad_threshold)
+
+    active = [index for index, is_active in enumerate(active_windows) if is_active]
+    if not active:
+        return source_path
+
+    padding_frames = frame_rate * vad_padding_ms // 1000
+    start = max(0, active[0] * window_frames - padding_frames)
+    end = min(frame_count, (active[-1] + 1) * window_frames + padding_frames)
+    if start == 0 and end == frame_count:
+        return source_path
+
+    with wave.open(target_path, "wb") as target:
+        target.setnchannels(channels)
+        target.setsampwidth(sample_width)
+        target.setframerate(frame_rate)
+        target.writeframes(frames[start * frame_size:end * frame_size])
+    return target_path
 
 
 VOICE_FILES = {
@@ -58,10 +100,13 @@ async def transcribe(file: UploadFile = File(...), language: str = Form("auto"))
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as source:
             source.write(await file.read())
             source_path = source.name
+        trimmed_path = source_path + ".trimmed.wav"
         try:
+            input_path = trim_wav_silence(source_path, trimmed_path)
+
             def run():
                 segments, info = whisper_model().transcribe(
-                    source_path,
+                    input_path,
                     language=None if language in ("", "auto") else language,
                     vad_filter=True,
                     beam_size=3,
@@ -75,6 +120,7 @@ async def transcribe(file: UploadFile = File(...), language: str = Form("auto"))
                     "model": model_name}
         finally:
             Path(source_path).unlink(missing_ok=True)
+            Path(trimmed_path).unlink(missing_ok=True)
 
 
 class SpeechRequest(BaseModel):
