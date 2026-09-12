@@ -1,4 +1,5 @@
 <div class="shell">
+  <a class="skip-link" href="#main">Skip to content</a>
   <nav class="sidebar">
     <h2>CCaaS</h2>
     <a routerLink="/agent-workspace" routerLinkActive="active">Agent Workspace</a>
@@ -11,7 +12,7 @@
     <a routerLink="/master-data" routerLinkActive="active">Master Data & Settings</a>
     <button class="logout" (click)="logout()">Log out</button>
   </nav>
-  <main class="content">
+  <main class="content" id="main">
     <router-outlet />
   </main>
 </div>

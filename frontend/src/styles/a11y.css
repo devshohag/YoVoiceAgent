@@ -10,7 +10,22 @@
   border: 0;
 }
 
-:focus-visible {
+.skip-link {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  z-index: var(--z-skip-link);
+  padding: var(--space-2) var(--space-4);
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-radius: 0 0 var(--radius-md) 0;
+}
+
+.skip-link:focus { left: 0; }
+.live-region-polite { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.qa-greyscale { filter: grayscale(1) !important; }
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -20,7 +35,7 @@
 }
 
 @media (forced-colors: active) {
-  :focus-visible {
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
     outline: 2px solid CanvasText;
   }
 }

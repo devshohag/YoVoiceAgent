@@ -96,7 +96,7 @@ export class UiLatencyChart {
             <span class="stage-breakdown__label">{{ stage.label }}</span>
             <div class="stage-breakdown__bar" role="img" [attr.aria-label]="stage.label + ': ' + total(stage.key) + ' milliseconds'">
               @for (segment of segments(stage.key); track segment.key) {
-                <span class="stage-breakdown__segment" [class]="'stage-breakdown__segment stage-breakdown__segment--' + segment.key" [style.width.%]="segment.value / total(stage.key) * 100">{{ segment.value >= 10 ? segment.value : '' }}</span>
+                <span class="stage-breakdown__segment" [class]="'stage-breakdown__segment stage-breakdown__segment--' + segment.key" [style.width.%]="segment.value / total(stage.key) * 100">{{ segment.label }} {{ segment.value }}ms</span>
               }
             </div>
           </div>
@@ -113,12 +113,12 @@ export class UiStageBreakdown {
   });
   readonly stages = [{ key: 'p50', label: 'p50' }, { key: 'p95', label: 'p95' }];
 
-  segments(stage: string): Array<{ key: keyof StageTiming; value: number }> {
+  segments(stage: string): Array<{ key: keyof StageTiming; label: string; value: number }> {
     const values = this.values()[stage as keyof StageTimingSet];
     return [
-      { key: 'stt', value: values.stt }, { key: 'endpoint', value: values.endpoint },
-      { key: 'routing', value: values.routing }, { key: 'llm', value: values.llm },
-      { key: 'tts', value: values.tts }, { key: 'rtp', value: values.rtp }
+      { key: 'stt', label: 'STT', value: values.stt }, { key: 'endpoint', label: 'Endpoint', value: values.endpoint },
+      { key: 'routing', label: 'Routing', value: values.routing }, { key: 'llm', label: 'LLM', value: values.llm },
+      { key: 'tts', label: 'TTS', value: values.tts }, { key: 'rtp', label: 'RTP', value: values.rtp }
     ];
   }
 
