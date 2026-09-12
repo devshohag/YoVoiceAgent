@@ -82,6 +82,8 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
+    # Keep the LLM off the speech cores. Override in .env.server for the host's CPU layout.
+    cpuset: "${OLLAMA_CPUSET:-0-1}"
     environment: { OLLAMA_KEEP_ALIVE: "5m", OLLAMA_NUM_PARALLEL: "1" }
     volumes: [ollama-data:/root/.ollama]
     networks: [ccaas-net]
@@ -98,6 +100,8 @@ services:
   local-ai:
     build: { context: ./infra/local-ai }
     restart: unless-stopped
+    # Speech gets its own cores so Ollama cannot multiply STT latency under load.
+    cpuset: "${LOCAL_AI_CPUSET:-2-3}"
     environment:
       WHISPER_MODEL: "${WHISPER_MODEL:-base}"
       WHISPER_DEVICE: cpu
