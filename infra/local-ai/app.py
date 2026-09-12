@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import struct
 import subprocess
@@ -27,6 +28,8 @@ vad_padding_ms = max(0, int(os.getenv("VAD_PADDING_MS", "80")))
 piper_default_language = os.getenv("PIPER_DEFAULT_LANGUAGE", "en-US")
 piper_output_sample_rate = max(8000, int(os.getenv("PIPER_OUTPUT_SAMPLE_RATE", "8000")))
 piper_warmup = os.getenv("PIPER_WARMUP", "true").lower() in ("1", "true", "yes")
+prompt_cache_dir = Path(os.getenv("PROMPT_CACHE_DIR", "/models/prompt-cache"))
+prompt_manifest_path = Path(os.getenv("PROMPT_MANIFEST", "/models/prompt-cache/manifest.json"))
 
 
 @lru_cache(maxsize=1)
@@ -144,6 +147,27 @@ class SpeechRequest(BaseModel):
     input: str
     language: str | None = None
     voice: str | None = None
+
+
+def prompt_key_is_safe(key: str) -> bool:
+    return bool(key) and all(character.isalnum() or character in "-_" for character in key)
+
+
+@app.get("/v1/audio/prompts/{key}")
+async def cached_prompt(key: str):
+    if not prompt_key_is_safe(key):
+        raise HTTPException(status_code=400, detail="Invalid prompt key")
+    prompt_path = prompt_cache_dir / f"{key}.wav"
+    if not prompt_path.is_file():
+        raise HTTPException(status_code=404, detail="Prompt audio is not cached")
+    return FileResponse(prompt_path, media_type="audio/wav", filename=f"{key}.wav")
+
+
+@app.get("/v1/audio/prompts")
+async def cached_prompts():
+    if not prompt_manifest_path.is_file():
+        return {"prompts": []}
+    return {"prompts": json.loads(prompt_manifest_path.read_text(encoding="utf-8"))}
 
 
 @app.post("/v1/audio/speech")

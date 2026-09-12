@@ -114,6 +114,8 @@ services:
       PIPER_DEFAULT_LANGUAGE: ${PIPER_DEFAULT_LANGUAGE:-en-US}
       PIPER_OUTPUT_SAMPLE_RATE: ${PIPER_OUTPUT_SAMPLE_RATE:-8000}
       PIPER_WARMUP: ${PIPER_WARMUP:-true}
+      PROMPT_CACHE_DIR: ${PROMPT_CACHE_DIR:-/models/prompt-cache}
+      PROMPT_MANIFEST: ${PROMPT_MANIFEST:-/models/prompt-cache/manifest.json}
     volumes:
       - local-ai-models:/models
     ports:
