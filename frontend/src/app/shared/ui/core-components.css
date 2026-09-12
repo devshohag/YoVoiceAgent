@@ -3,7 +3,7 @@
 .ui-input,
 .ui-select {
   min-height: var(--control-height);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-interactive);
   border-radius: var(--radius-md);
 }
 
